@@ -6,7 +6,16 @@ app.use(express.static(__dirname + '/script'));
 //Store all JS and CSS in Scripts folder.
 
 app.get('/', function(req, res){
-   res.sendFile("index.html");
+   res.sendFile('index.html');
+});
+
+app.get('/main.js', function(req, res){
+   res.sendFile('main.js');
+});
+
+app.post('/testupload', function(req, res) {
+  console.log('hello');
+  res.send('test is "running" (yeah sure)');
 });
 
 app.listen(3000);

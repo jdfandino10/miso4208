@@ -6,10 +6,53 @@
   </head>
   <body>
     <h1>Testing service</h1>
+    <p>With this tool you can run a Cypress test for multiple
+      browsers/resolutions automatically.</p>
     <p>Please fill the information and upload your test file</p>
-    <form action="fileupload" method="post" enctype="multipart/form-data">
+    <form id="testForm" enctype="multipart/form-data">
+      <table>
+        <tr>
+          <td>Browser\Resolution</td>
+          <td>res 1</td>
+          <td>res 2</td>
+          <td>res 3</td>
+          <td>res 4</td>
+          <td>res 5</td>
+        </tr>
+        <tr>
+          <td>Browser 1</td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+        </tr>
+        <tr>
+          <td>Browser 2</td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+        </tr>
+        <tr>
+          <td>Browser 3</td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+          <td><input type="checkbox" name="vehicle1" value="Bike"></td>
+        </tr>
+      </table>
       <input type="file" name="filetoupload"><br>
       <input type="submit">
     </form>
+
+    <script
+  src="https://code.jquery.com/jquery-3.3.1.min.js"
+  integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+  crossorigin="anonymous"></script>
+  <script type="text/javascript" src="/main.js">
+  </script>
   </body>
 </html>
