@@ -1,0 +1,22 @@
+{
+  "name": "miso4208",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jdfandino10/miso4208.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jdfandino10/miso4208/issues"
+  },
+  "homepage": "https://github.com/jdfandino10/miso4208#readme",
+  "dependencies": {
+    "express": "^4.16.3"
+  }
+}
