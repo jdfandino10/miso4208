@@ -17,6 +17,9 @@
   },
   "homepage": "https://github.com/jdfandino10/miso4208#readme",
   "dependencies": {
-    "express": "^4.16.3"
+    "body-parser": "^1.18.3",
+    "busboy": "^0.2.14",
+    "express": "^4.16.3",
+    "express-busboy": "^7.0.0"
   }
 }
