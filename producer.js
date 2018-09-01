@@ -21,19 +21,20 @@ function sendMessage(message) {
     var jsonMessage = JSON.stringify(message);
     rabbitChannel.sendToQueue(REQUEST_QUEUE_NAME, Buffer.from(jsonMessage));
 }
+module.exports = {sendMessage};
 
-init()
-.then(function () {
-    sendMessage({
-        id: 1,
-        email: 'jd.fandino10@uniandes.edu.co',
-        gitUrl: 'https://github.com/jcbages/cypress-hello-world',
-        environments: [
-            //{ browser: 'chrome', viewport: '1000' },
-            { browser: 'electron', viewport: '600' }
-        ]
-    });
-    console.log(' [*] Message sent');
-});
+init();
+// .then(function () {
+//     sendMessage({
+//         id: 1,
+//         email: 'jd.fandino10@uniandes.edu.co',
+//         gitUrl: 'https://github.com/jcbages/cypress-hello-world',
+//         environments: [
+//             //{ browser: 'chrome', viewport: '1000' },
+//             { browser: 'electron', viewport: '600' }
+//         ]
+//     });
+//     console.log(' [*] Message sent');
+// });
 
 // The then part is just for debugging
