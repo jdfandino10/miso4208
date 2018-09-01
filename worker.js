@@ -9,18 +9,6 @@ const REQUEST_QUEUE_NAME = 'cypress-request';
 const DEFAULT_GIT_REPOS_FOLDER = './gitRepos/';
 const FROM_DEFAULT_EMAIL = 'jc.bages10@uniandes.edu.co';
 
-function init() {
-    sgMail.setApiKey(SENDGRID_API_KEY);
-
-    amqp.connect('amqp://localhost', function(_, conn) {
-        conn.createChannel(function (_, channel) {
-            channel.assertQueue(REQUEST_QUEUE_NAME, { durable: false });
-            console.log(' [*] Connected to the request queue');
-            while (true) processNextQueueRequest(channel);
-        });
-    });
-}
-
 function processNextQueueRequest(requestQueue) {
     requestQueue.consume(REQUEST_QUEUE_NAME, function(message) {
         console.log(" [x] Received message id=%s", message.content.id);
@@ -41,7 +29,7 @@ function downloadGitRepository(request) {
 }
 
 function parseFolderName(gitUrl) {
-    var n = gitUrl.length; 
+    var n = gitUrl.length;
     gitUrl = gitUrl.endsWith('/') ? gitUrl.substring(0, n-1) : gitUrl;
     var index = gitUrl.lastIndexOf('/');
     return gitUrl.substring(index + 1);
@@ -86,4 +74,16 @@ function sendResults(request, results) {
     });
 }
 
-init();
+module.exports = {};
+module.exports.init = function () {
+    sgMail.setApiKey(SENDGRID_API_KEY);
+
+    amqp.connect('amqp://localhost', function(_, conn) {
+        conn.createChannel(function (_, channel) {
+            channel.assertQueue(REQUEST_QUEUE_NAME, { durable: false });
+            console.log(' [*] Connected to the request queue');
+            while (true) processNextQueueRequest(channel);
+        });
+    });
+}
+// init();
