@@ -1,1 +1,4 @@
 node_modules/
+uploadedFiles/
+gitRepos/
+.DS_Store
