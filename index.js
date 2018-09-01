@@ -3,7 +3,6 @@ var bb = require('express-busboy');
 var cypress = require('cypress');
 var app = express();
 
-var worker = require('./worker');
 var producer = require('./producer');
 
 bb.extend(app, {
@@ -27,7 +26,9 @@ app.get('/main.js', function(req, res){
 
 app.post('/testupload', function(req, res) {
     var message = req.body;
+    console.log(message);
     message.id = new Date().getTime();
+    if (!Array.isArray(message.env)) message.env = [message.env];
     message.environments = message.env.map((elem) => {
       var parts = elem.split(' ');
       var browser = parts[0];

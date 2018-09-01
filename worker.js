@@ -40,16 +40,17 @@ function processNextQueueRequest(requestQueue) {
 }
 
 function processRequest(request) {
-    return downloadGitRepository(request)
-    .then(function () { return runCypressTests(request); })
+    var timestamp = new Date().getTime();
+    return downloadGitRepository(request, timestamp)
+    .then(function () { return runCypressTests(request, timestamp); })
     .then(function (results) { return sendResults(request, results); })
     .then(function () { console.log('Done!') })
     .catch(function (err) { console.log(err); });
 }
 
-function downloadGitRepository(request) {
-    var projectPath = DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl);
-    deleteFolderRecursive(projectPath);
+function downloadGitRepository(request, timestamp) {
+    var projectPath = DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + "_" + timestamp;
+    // deleteFolderRecursive(projectPath);
     return git.Clone(request.gitUrl, projectPath);
 }
 
@@ -74,8 +75,8 @@ function deleteFolderRecursive(path) {
     }
 }
 
-function runCypressTests(request) {
-    var projectPath = DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl);
+function runCypressTests(request, timestamp) {
+    var projectPath = DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + "_" + timestamp;
     var cypressPromises = request.environments.map(function (environment) {
         return cypress.run({
             browser: environment.browser,

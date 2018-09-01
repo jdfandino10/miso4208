@@ -1,4 +1,3 @@
-console.log('main js ok');
 
 $('#testForm').submit(function () {
   var selectedEnvs = $('input:checked');
