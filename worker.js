@@ -3,6 +3,7 @@ const cypress = require('cypress');
 const fs = require('fs');
 const git = require('nodegit');
 const sgMail = require('@sendgrid/mail');
+const {exec} = require('child_process');
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const REQUEST_QUEUE_NAME = 'cypress-request';
@@ -40,12 +41,58 @@ function processNextQueueRequest(requestQueue) {
 }
 
 function processRequest(request) {
+    switch(request.type)
+    {
+        case("e2e-cypress"):
+        return cypressRunTest(request);
+        break;
+        case("random-web"):
+        return randomWebTest(request);
+    }
+    
+}
+
+function cypressRunTest(request) {
     var timestamp = new Date().getTime();
     return downloadGitRepository(request, timestamp)
-    .then(function () { return runCypressTests(request, timestamp); })
-    .then(function (results) { return sendResults(request, results); })
-    .then(function () { console.log('Done!') })
-    .catch(function (err) { console.log(err); });
+        .then(function () { return runCypressTests(request, timestamp); })
+        .then(function (results) { return sendResults(request, results); })
+        .then(function () { console.log('Done!'); })
+        .catch(function (err) { console.log(err); });
+}
+
+function randomWebTest(request) {
+    console.log(request);
+    replaceTemplateTask(request,"random/test/specs/gremlins");
+    executeCommand("node node_modules/webdriverio/bin/wdio random/wdio.conf.js");
+}
+
+function replaceTemplateTask(obj,path){
+    var fs = require('fs');
+    fs.readFile(path+".template", 'utf8', function (err,data) {
+        if (err) return console.log(err);
+        for(key in obj) {
+            data = data.replace('<<<'+key+'>>>', obj[key]);
+        }
+        fs.writeFile(path+".js", data, 'utf8', function (err) {
+            if (err) return console.log(err);
+            
+        });
+    });
+}
+
+function executeCommand(command)
+{
+exec(command, (err, stdout, stderr) => {
+  if (err) {
+    console.log(err);
+    return;
+  }
+
+  // the *entire* stdout and stderr (buffered)
+  console.log(`stdout: ${stdout}`);
+  console.log(`stderr: ${stderr}`);
+})
 }
 
 function downloadGitRepository(request, timestamp) {

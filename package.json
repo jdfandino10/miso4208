@@ -6,7 +6,8 @@
   "scripts": {
     "producer": "node producer.js",
     "worker": "node worker.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "randomweb": "node node_modules/webdriverio/bin/wdio wdio.conf.js"
   },
   "repository": {
     "type": "git",
@@ -23,11 +24,17 @@
     "amqplib": "^0.5.2",
     "body-parser": "^1.18.3",
     "busboy": "^0.2.14",
-    "cypress": "^3.1.0",
     "express": "^4.16.3",
     "express-busboy": "^7.0.0",
     "json-pretty-html": "^1.1.2",
     "mochawesome": "^3.0.3",
-    "nodegit": "^0.22.2"
+    "nodegit": "^0.22.2",
+    "webdriverio": "^4.13.2",
+    "cypress": "^3.1.0"
+  },
+  "devDependencies": {
+    "wdio-jasmine-framework": "^0.3.2",
+    "wdio-selenium-standalone-service": "0.0.9",
+    "wdio-spec-reporter": "^0.1.2"
   }
 }

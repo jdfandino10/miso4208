@@ -48,5 +48,52 @@ app.post('/testupload', function(req, res) {
     //producer.sendMessage(req.body);
 });
 
+app.get('/random/web', function(req,res)
+{
+    var resolution = req.header("resolution");
+    var resSplit = resolution.split('x');
+    var width = resSplit[0];
+    var height = resSplit[1];
+    var url=req.header("url");
+    var browser=req.header("browser");
+    var id = new Date().getTime();
+    var email=req.header("email");
+    var number=req.header("number");
+    var type="random-web"
+    var seed=req.header("seed");
+    var m = {
+        type: type,
+        id: id,
+        email: email,
+        width: width,
+        height: height,
+        browser:browser,
+        seed:seed,
+        number:number
+      };
+    producer.sendMessage(m);
+    "node node_modules/webdriverio/bin/wdio wdio.conf.js"
+
+    /*message.id = new Date().getTime();
+    if (!Array.isArray(message.env)) message.env = [message.env];
+    message.environments = message.env.map((elem) => {
+      var parts = elem.split(' ');
+      var browser = parts[0];
+      var viewport = parts[1];
+      return {browser, viewport};
+    });
+    console.log(message);
+    message.environments.forEach((elem) => {
+      var m = {
+        id: message.id,
+        email: message.email,
+        gitUrl: message.gitUrl,
+        environments: [elem]
+      };
+      producer.sendMessage(m);
+    });
+    //producer.sendMessage(req.body);*/
+})
+
 //worker.init();
 app.listen(3000);
