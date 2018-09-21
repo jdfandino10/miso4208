@@ -1,14 +1,17 @@
 const amqp = require('amqplib/callback_api');
 const cypress = require('cypress');
+const Launcher = require('webdriverio').Launcher;
 const fs = require('fs');
 const git = require('nodegit');
 const sgMail = require('@sendgrid/mail');
+const config_generator = require('./wdio_generator/generator');
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const REQUEST_QUEUE_NAME = 'cypress-request';
 const DEFAULT_GIT_REPOS_FOLDER = './gitRepos/';
 const DEFAULT_RESULTS_FOLDER = './results/'
 const FROM_DEFAULT_EMAIL = 'jc.bages10@uniandes.edu.co';
+
 
 function init() {
     createMissingFolder(DEFAULT_GIT_REPOS_FOLDER);
@@ -76,6 +79,8 @@ function deleteFolderRecursive(path) {
 }
 
 function runCypressTests(request, timestamp) {
+
+    var wdio = new Launcher("./wdio.conf.js",{capabilities: [{browserName: 'firefox'}]});
     var projectPath = DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + "_" + timestamp;
     var cypressPromises = request.environments.map(function (environment) {
         return cypress.run({
