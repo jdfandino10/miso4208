@@ -41,22 +41,33 @@ function processNextQueueMessage(requestQueue) {
 }
 
 function processRequest(request) {
+    console.log(' [*] processRequest for request');
+    console.log(request);
+
     var timestamp = new Date().getTime();
 
     return downloadGitRepository(request, timestamp)
         .then(function () { return runTests(request, timestamp); })
         .then(function (results) { return sendResults(request, results); })
-        .then(function () { cleanRepository(request, timestamp); })
-        .then(function () { console.log(' [x] Finished processing message id=%s', request.id); })
-        .catch(function (err) { console.log(' [x] An error occured processing message id=%s: %s', request.id, err); });
+        .then(function () {
+            // cleanRepository(request, timestamp);
+            console.log(' [x] Finished processing message id=%s', request.id);
+        })
+        .catch(function (err) {
+            // cleanRepository(request, timestamp);
+            console.log(' [x] An error occured processing message id=%s: %s', request.id, err);
+        });
 }
 
 function runTests(request, timestamp) {
-    const projectPath = getProjectPath(request, timestamp);
-    config_generator.generate(request, projectPath);
+    console.log(' [*] Running test of type: ' + request.type);
+
+    const wdioGenerator = new config_generator();
+    const projectPath = getProjectPath(request, timestamp, true);
+    wdioGenerator.generate(request, projectPath);
 
     if (request.type === WEB_RANDOM_KEY) {
-        return runRandomWebTest(request);
+        return runRandomWebTest(request, timestamp);
     } else if (request.type.endsWith(WEB_TEST_KEY)) {
         return runWebTests(request, timestamp);
     } else {
@@ -64,9 +75,9 @@ function runTests(request, timestamp) {
     }
 }
 
-function runRandomWebTest(request) {
-    replaceTemplateTask(request,'random/test/specs/gremlins');
-    executeCommand('node node_modules/webdriverio/bin/wdio random/wdio.conf.js');
+function runRandomWebTest(request, timestamp) {
+    replaceTemplateTask(request, './random/test/specs/gremlins');
+    runWebTests(request, timestamp);
 }
 
 function replaceTemplateTask(request, path) {
@@ -80,24 +91,15 @@ function replaceTemplateTask(request, path) {
     console.log(' [x] Gremlins template generated sucessfully');
 }
 
-function executeCommand(command) {
-    exec(command, (err, stdout, stderr) => {
-        if (err) {
-            console.log(err);
-            return;
-        }
-
-        // the *entire* stdout and stderr (buffered)
-        console.log(`stdout: ${stdout}`);
-        console.log(`stderr: ${stderr}`);
-    });
-}
-
 function downloadGitRepository(request, timestamp) {
-    createMissingFolderIfRequired(DEFAULT_GIT_REPOS_FOLDER);
+    if (!request.type.startsWith('random-')) {    
+        console.log(' [*] Downloading Git repository: ' + request.gitUrl);
 
-    const projectPath = getProjectPath(request, timestamp);
-    return git.Clone(request.gitUrl, projectPath);
+        createMissingFolderIfRequired(DEFAULT_GIT_REPOS_FOLDER);
+
+        const projectPath = getProjectPath(request, timestamp);
+        return git.Clone(request.gitUrl, projectPath);
+    }
 }
 
 function parseFolderName(gitUrl) {
@@ -107,11 +109,14 @@ function parseFolderName(gitUrl) {
     return gitUrl.substring(index + 1);
 }
 
-function getProjectPath(request, timestamp) {
-    return DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + '_' + timestamp;
+function getProjectPath(request, timestamp, useBasePath = false) {
+    const basePath = useBasePath && request.basePath ? '/' + request.basePath : '';
+    return DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + '_' + timestamp + basePath;
 }
 
 function cleanRepository(request, timestamp) {
+    console.log(' [*] Cleaning repository');
+
     const projectPath = getProjectPath(request, timestamp);
     deleteFolderRecursive(projectPath);
 }
@@ -131,7 +136,11 @@ function deleteFolderRecursive(path) {
 }
 
 function runWebTests(request, timestamp) {
-    const projectPath = getProjectPath(request, timestamp);
+    console.log(' [*] Running a web test with wdio');
+
+    const projectPath = request.type.startsWith('random-') ? getProjectPath(request, timestamp, true) : './random';
+    console.log(' [*] Project path: ' + projectPath);
+
     var wdio = new Launcher(projectPath + '/wdio.conf.js');
     return wdio.run();
 }
@@ -141,7 +150,7 @@ function runAndroidTest(request, timestamp) {
 }
 
 function sendResults(request, results) {
-    console.log('Sending Results...');
+    console.log(' [*] Sending Results to email: ' + request.email);
 
     var jsonResults = JSON.stringify({ results: results }, null, 2);
     saveResultsSync(request, jsonResults);

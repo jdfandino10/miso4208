@@ -1,8 +1,14 @@
 const express = require('express');
 const producer = require('./producer');
 const uuidv4 = require('uuid/v4');
+const bodyParser = require('body-parser');
 
 const app = express();
+app.use(bodyParser.json())
+
+app.get('/', function (_, res) {
+    res.json({ msg: 'Up and running :D' });
+});
 
 app.post('/test', function(req, res) {
     /**
@@ -12,6 +18,7 @@ app.post('/test', function(req, res) {
      *   gitUrl: <string>,
      *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web'},
      *   randomSeed: <number>,
+     *   basePath: <string>,
      *   gremlinsNumber: <number>,
      *   environments: [
      *     {
@@ -34,6 +41,8 @@ app.post('/test', function(req, res) {
         message.environment = environment;
         producer.sendMessage(message);
     });
+
+    res.json({ msg: 'Test are running. Check your email with the results as soon as they are ready' });
 });
 
 app.get('/random/web', function(req,res)
