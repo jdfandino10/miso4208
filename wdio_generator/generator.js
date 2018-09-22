@@ -1,3 +1,5 @@
+const fs = require('fs');
+
 const beforeFuncTemplate = `function (capabilities, specs) {
   browser.setViewportSize({
     width: _WIDTH_,
@@ -62,10 +64,13 @@ class Generator {
       fun = this.beforeFunc;
     }
     str = str.replace('"__BEFORE__FUNC__"', fun);
+    str = 'exports.config = ' + str;
     return str;
   }
 
-  setWindowSize(width, height) {
+  setWindowSize(viewport) {
+    const width = viewport.width;
+    const height = viewport.height;
     this.beforeFunc = beforeFuncTemplate.replace('_WIDTH_', width);
     this.beforeFunc = this.beforeFunc.replace('_HEIGHT_', height);
     return this;
@@ -133,6 +138,20 @@ class Generator {
         ignoreUndefinedDefinitions: false,
     };
     return this;
+  }
+
+  generate(request, projectPath) {
+    if (request.type === 'bdt-web') {
+      this.setSpecs(['./features/**/*.feature'])
+        .setCucumber(projectPath + '/features/step-definitions');
+    } else if (request.type === 'headless-web' || request.type === 'random-web') {
+      this.setSpecs(['./test/specs/**/*.js']);
+    }
+    this.setUrl(request.url)
+      .setBrowser(request.environment.browser)
+      .setWindowSize(request.environment.viewport);
+    const jsonResults = this.toString();
+    fs.writeFileSync(projectPath + '/wdio.config.json', jsonResults);
   }
 }
 
