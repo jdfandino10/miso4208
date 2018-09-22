@@ -72,27 +72,6 @@ app.get('/random/web', function(req,res)
         number:number
       };
     producer.sendMessage(m);
-    "node node_modules/webdriverio/bin/wdio wdio.conf.js"
-
-    /*message.id = new Date().getTime();
-    if (!Array.isArray(message.env)) message.env = [message.env];
-    message.environments = message.env.map((elem) => {
-      var parts = elem.split(' ');
-      var browser = parts[0];
-      var viewport = parts[1];
-      return {browser, viewport};
-    });
-    console.log(message);
-    message.environments.forEach((elem) => {
-      var m = {
-        id: message.id,
-        email: message.email,
-        gitUrl: message.gitUrl,
-        environments: [elem]
-      };
-      producer.sendMessage(m);
-    });
-    //producer.sendMessage(req.body);*/
 })
 
 //worker.init();
