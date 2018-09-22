@@ -19,7 +19,7 @@ app.post('/test', function(req, res) {
      *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web'},
      *   randomSeed: <number>,
      *   basePath: <string>,
-     *   gremlinsNumber: <number>,
+     *   gremlinsTTL: <number>,
      *   environments: [
      *     {
      *       browser: {'chrome' | 'firefox'},
@@ -38,6 +38,7 @@ app.post('/test', function(req, res) {
 
     const environments = message.environments;
     environments.forEach((environment) => {
+        message.environmentId = uuidv4();
         message.environment = environment;
         producer.sendMessage(message);
     });

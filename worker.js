@@ -7,6 +7,7 @@ const Launcher = require('webdriverio').Launcher;
 
 const WEB_TEST_KEY = '-web';
 const WEB_RANDOM_KEY = 'random-web';
+const WEB_RANDOM_PATH = './random';
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const REQUEST_QUEUE_NAME = 'testing-request';
 const DEFAULT_GIT_REPOS_FOLDER = './gitRepos/';
@@ -66,6 +67,8 @@ function runTests(request, timestamp) {
     const projectPath = getProjectPath(request, timestamp, true);
     wdioGenerator.generate(request, projectPath);
 
+    console.log('generated!');
+
     if (request.type === WEB_RANDOM_KEY) {
         return runRandomWebTest(request, timestamp);
     } else if (request.type.endsWith(WEB_TEST_KEY)) {
@@ -77,7 +80,7 @@ function runTests(request, timestamp) {
 
 function runRandomWebTest(request, timestamp) {
     replaceTemplateTask(request, './random/test/specs/gremlins');
-    runWebTests(request, timestamp);
+    return runWebTests(request, timestamp);
 }
 
 function replaceTemplateTask(request, path) {
@@ -92,13 +95,15 @@ function replaceTemplateTask(request, path) {
 }
 
 function downloadGitRepository(request, timestamp) {
-    if (!request.type.startsWith('random-')) {    
+    if (request.type !== WEB_RANDOM_KEY) {    
         console.log(' [*] Downloading Git repository: ' + request.gitUrl);
 
         createMissingFolderIfRequired(DEFAULT_GIT_REPOS_FOLDER);
 
         const projectPath = getProjectPath(request, timestamp);
         return git.Clone(request.gitUrl, projectPath);
+    } else {
+        return Promise.resolve();
     }
 }
 
@@ -110,8 +115,12 @@ function parseFolderName(gitUrl) {
 }
 
 function getProjectPath(request, timestamp, useBasePath = false) {
-    const basePath = useBasePath && request.basePath ? '/' + request.basePath : '';
-    return DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + '_' + timestamp + basePath;
+    if (request.type !== WEB_RANDOM_KEY) {
+        const basePath = useBasePath && request.basePath ? '/' + request.basePath : '';
+        return DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + '_' + request.environmentId + '_' + timestamp + basePath;
+    } else {
+        return WEB_RANDOM_PATH;
+    }
 }
 
 function cleanRepository(request, timestamp) {
@@ -138,7 +147,7 @@ function deleteFolderRecursive(path) {
 function runWebTests(request, timestamp) {
     console.log(' [*] Running a web test with wdio');
 
-    const projectPath = request.type.startsWith('random-') ? getProjectPath(request, timestamp, true) : './random';
+    const projectPath = getProjectPath(request, timestamp, true);
     console.log(' [*] Project path: ' + projectPath);
 
     var wdio = new Launcher(projectPath + '/wdio.conf.js');

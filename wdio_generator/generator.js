@@ -153,7 +153,7 @@ class Generator {
     } else if (request.type === 'headless-web') {
       this.setSpecs([projectPath + '/test/**/*.js']);
     } else if (request.type === 'random-web') {
-      this.setSpecs([projectPath + '/random/test/**/*.js']);
+      this.setSpecs([projectPath + '/test/specs/gremlins.js']);
     }
     this.setUrl(request.url)
         .setBrowser(request.environment.browser)

@@ -33,7 +33,7 @@ describe('Monkey testing with gremlins ', function() {
     browser.executeAsync(loadScript);
 
     browser.timeoutsAsyncScript(60000);
-    browser.executeAsync(unleashGremlins, <<<gremlinsNumber>>>);
+    browser.executeAsync(unleashGremlins, <<<gremlinsTTL>>>);
   });
 
   afterAll(function() {
