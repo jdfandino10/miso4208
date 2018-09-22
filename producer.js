@@ -1,6 +1,6 @@
 const amqp = require('amqplib/callback_api');
 
-const REQUEST_QUEUE_NAME = 'cypress-request';
+const REQUEST_QUEUE_NAME = 'testing-request';
 
 var rabbitChannel;
 
@@ -21,20 +21,8 @@ function sendMessage(message) {
     var jsonMessage = JSON.stringify(message);
     rabbitChannel.sendToQueue(REQUEST_QUEUE_NAME, Buffer.from(jsonMessage));
 }
-module.exports = {sendMessage};
 
-init();
-// .then(function () {
-//     sendMessage({
-//         id: 1,
-//         email: 'jd.fandino10@uniandes.edu.co',
-//         gitUrl: 'https://github.com/jcbages/cypress-hello-world',
-//         environments: [
-//             //{ browser: 'chrome', viewport: '1000' },
-//             { browser: 'electron', viewport: '600' }
-//         ]
-//     });
-//     console.log(' [*] Message sent');
-// });
-
-// The then part is just for debugging
+module.exports = {
+    init: init,
+    sendMessage: sendMessage
+};

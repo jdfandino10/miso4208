@@ -24,13 +24,14 @@
     "amqplib": "^0.5.2",
     "body-parser": "^1.18.3",
     "busboy": "^0.2.14",
+    "cypress": "^3.1.0",
     "express": "^4.16.3",
     "express-busboy": "^7.0.0",
     "json-pretty-html": "^1.1.2",
     "mochawesome": "^3.0.3",
     "nodegit": "^0.22.2",
-    "webdriverio": "^4.13.2",
-    "cypress": "^3.1.0"
+    "uuid": "^3.3.2",
+    "webdriverio": "^4.13.2"
   },
   "devDependencies": {
     "wdio-jasmine-framework": "^0.3.2",
