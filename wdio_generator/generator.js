@@ -144,8 +144,10 @@ class Generator {
     if (request.type === 'bdt-web') {
       this.setSpecs(['./features/**/*.feature'])
         .setCucumber(projectPath + '/features/step-definitions');
-    } else if (request.type === 'headless-web' || request.type === 'random-web') {
-      this.setSpecs(['./test/specs/**/*.js']);
+    } else if (request.type === 'headless-web') {
+      this.setSpecs(['./test/**/*.js']);
+    } else if (request.type === 'random-web') {
+      this.setSpecs(['./random/test/**/*.js']);
     }
     this.setUrl(request.url)
       .setBrowser(request.environment.browser)
