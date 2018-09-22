@@ -1,107 +1,105 @@
 const amqp = require('amqplib/callback_api');
-const cypress = require('cypress');
-const Launcher = require('webdriverio').Launcher;
 const fs = require('fs');
 const git = require('nodegit');
 const sgMail = require('@sendgrid/mail');
 const config_generator = require('./wdio_generator/generator');
-const {exec} = require('child_process');
+const Launcher = require('webdriverio').Launcher;
 
+const WEB_TEST_KEY = '-web';
+const WEB_RANDOM_KEY = 'random-web';
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
-const REQUEST_QUEUE_NAME = 'cypress-request';
+const REQUEST_QUEUE_NAME = 'testing-request';
 const DEFAULT_GIT_REPOS_FOLDER = './gitRepos/';
 const DEFAULT_RESULTS_FOLDER = './results/'
 const FROM_DEFAULT_EMAIL = 'jc.bages10@uniandes.edu.co';
 
 
 function init() {
-    createMissingFolder(DEFAULT_GIT_REPOS_FOLDER);
-    createMissingFolder(DEFAULT_RESULTS_FOLDER);
-
     sgMail.setApiKey(SENDGRID_API_KEY);
 
     amqp.connect('amqp://localhost', function(_, conn) {
         conn.createChannel(function (_, channel) {
             channel.assertQueue(REQUEST_QUEUE_NAME, { durable: false });
             console.log(' [*] Connected to the request queue');
-            processNextQueueRequest(channel);
+            processNextQueueMessage(channel);
         });
     });
 }
 
-function createMissingFolder(path) {
+function createMissingFolderIfRequired(path) {
     if (!fs.existsSync(path)) {
         fs.mkdirSync(path);
     }
 }
 
-function processNextQueueRequest(requestQueue) {
-    requestQueue.consume(REQUEST_QUEUE_NAME, function(message) {
-        var request = JSON.parse(message.content.toString());
-        console.log(" [x] Received message id=%s", request.id);
+function processNextQueueMessage(requestQueue) {
+    requestQueue.consume(REQUEST_QUEUE_NAME, function(queueMessage) {
+        var request = JSON.parse(queueMessage.content.toString());
+        console.log(' [x] Received message id=%s', request.id);
         processRequest(request);
     }, { noAck: true });
 }
 
 function processRequest(request) {
-    switch(request.type)
-    {
-        case("e2e-cypress"):
-        return cypressRunTest(request);
-        break;
-        case("random-web"):
-        return randomWebTest(request);
+    console.log(' [*] processRequest for request');
+    console.log(request);
+
+    var timestamp = new Date().getTime();
+
+    return downloadGitRepository(request, timestamp)
+        .then(function () { return runTests(request, timestamp); })
+        .then(function (results) { return sendResults(request, results); })
+        .then(function () {
+            // cleanRepository(request, timestamp);
+            console.log(' [x] Finished processing message id=%s', request.id);
+        })
+        .catch(function (err) {
+            // cleanRepository(request, timestamp);
+            console.log(' [x] An error occured processing message id=%s: %s', request.id, err);
+        });
+}
+
+function runTests(request, timestamp) {
+    console.log(' [*] Running test of type: ' + request.type);
+
+    const wdioGenerator = new config_generator();
+    const projectPath = getProjectPath(request, timestamp, true);
+    wdioGenerator.generate(request, projectPath);
+
+    if (request.type === WEB_RANDOM_KEY) {
+        return runRandomWebTest(request, timestamp);
+    } else if (request.type.endsWith(WEB_TEST_KEY)) {
+        return runWebTests(request, timestamp);
+    } else {
+        return runAndroidTest(request, timestamp);
+    }
+}
+
+function runRandomWebTest(request, timestamp) {
+    replaceTemplateTask(request, './random/test/specs/gremlins');
+    runWebTests(request, timestamp);
+}
+
+function replaceTemplateTask(request, path) {
+    data = fs.readFileSync(path + '.template', 'utf8');
+
+    for (key in request) {
+        data = data.replace('<<<' + key + '>>>', request[key]);
     }
 
-}
-
-function cypressRunTest(request) {
-    var timestamp = new Date().getTime();
-    return downloadGitRepository(request, timestamp)
-        .then(function () { return runCypressTests(request, timestamp); })
-        .then(function (results) { return sendResults(request, results); })
-        .then(function () { console.log('Done!'); })
-        .catch(function (err) { console.log(err); });
-}
-
-function randomWebTest(request) {
-    console.log(request);
-    replaceTemplateTask(request,"random/test/specs/gremlins");
-    executeCommand("node node_modules/webdriverio/bin/wdio random/wdio.conf.js");
-}
-
-function replaceTemplateTask(obj,path){
-    var fs = require('fs');
-    fs.readFile(path+".template", 'utf8', function (err,data) {
-        if (err) return console.log(err);
-        for(key in obj) {
-            data = data.replace('<<<'+key+'>>>', obj[key]);
-        }
-        fs.writeFile(path+".js", data, 'utf8', function (err) {
-            if (err) return console.log(err);
-
-        });
-    });
-}
-
-function executeCommand(command)
-{
-exec(command, (err, stdout, stderr) => {
-  if (err) {
-    console.log(err);
-    return;
-  }
-
-  // the *entire* stdout and stderr (buffered)
-  console.log(`stdout: ${stdout}`);
-  console.log(`stderr: ${stderr}`);
-})
+    fs.writeFileSync(path + '.js', data, 'utf8');
+    console.log(' [x] Gremlins template generated sucessfully');
 }
 
 function downloadGitRepository(request, timestamp) {
-    var projectPath = DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + "_" + timestamp;
-    // deleteFolderRecursive(projectPath);
-    return git.Clone(request.gitUrl, projectPath);
+    if (!request.type.startsWith('random-')) {    
+        console.log(' [*] Downloading Git repository: ' + request.gitUrl);
+
+        createMissingFolderIfRequired(DEFAULT_GIT_REPOS_FOLDER);
+
+        const projectPath = getProjectPath(request, timestamp);
+        return git.Clone(request.gitUrl, projectPath);
+    }
 }
 
 function parseFolderName(gitUrl) {
@@ -109,6 +107,18 @@ function parseFolderName(gitUrl) {
     gitUrl = gitUrl.endsWith('/') ? gitUrl.substring(0, n-1) : gitUrl;
     var index = gitUrl.lastIndexOf('/');
     return gitUrl.substring(index + 1);
+}
+
+function getProjectPath(request, timestamp, useBasePath = false) {
+    const basePath = useBasePath && request.basePath ? '/' + request.basePath : '';
+    return DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + '_' + timestamp + basePath;
+}
+
+function cleanRepository(request, timestamp) {
+    console.log(' [*] Cleaning repository');
+
+    const projectPath = getProjectPath(request, timestamp);
+    deleteFolderRecursive(projectPath);
 }
 
 function deleteFolderRecursive(path) {
@@ -125,23 +135,22 @@ function deleteFolderRecursive(path) {
     }
 }
 
-function runCypressTests(request, timestamp) {
+function runWebTests(request, timestamp) {
+    console.log(' [*] Running a web test with wdio');
 
-    var wdio = new Launcher("./wdio.conf.js",{capabilities: [{browserName: 'firefox'}]});
-    var projectPath = DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + "_" + timestamp;
-    var cypressPromises = request.environments.map(function (environment) {
-        return cypress.run({
-            browser: environment.browser,
-            viewport: environment.viewport,
-            project: projectPath,
-            reporter: 'json'
-        });
-    });
-    return Promise.all(cypressPromises);
+    const projectPath = request.type.startsWith('random-') ? getProjectPath(request, timestamp, true) : './random';
+    console.log(' [*] Project path: ' + projectPath);
+
+    var wdio = new Launcher(projectPath + '/wdio.conf.js');
+    return wdio.run();
+}
+
+function runAndroidTest(request, timestamp) {
+    console.log(' [x] Android not supported, skipping test');
 }
 
 function sendResults(request, results) {
-    console.log('Sending Results...');
+    console.log(' [*] Sending Results to email: ' + request.email);
 
     var jsonResults = JSON.stringify({ results: results }, null, 2);
     saveResultsSync(request, jsonResults);
@@ -158,6 +167,8 @@ function sendResults(request, results) {
 function saveResultsSync(request, jsonResults) {
     var currTime = new Date().getTime();
     var fileName = parseFolderName(request.gitUrl) + '-' + currTime;
+
+    createMissingFolderIfRequired(DEFAULT_RESULTS_FOLDER);
     fs.writeFileSync(DEFAULT_RESULTS_FOLDER + fileName + '.json', jsonResults);
 }
 

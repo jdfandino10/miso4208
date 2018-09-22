@@ -15,7 +15,7 @@ function unleashGremlins(ttl, callback) {
     callback();
   }
   var horde = window.gremlins.createHorde();
-  horde.seed(<<<seed>>>);
+  horde.seed(<<<randomSeed>>>);
 
   horde.after(callback);
   window.onbeforeunload = stop;
@@ -33,7 +33,7 @@ describe('Monkey testing with gremlins ', function() {
     browser.executeAsync(loadScript);
 
     browser.timeoutsAsyncScript(60000);
-    browser.executeAsync(unleashGremlins, <<<number>>>);
+    browser.executeAsync(unleashGremlins, <<<gremlinsNumber>>>);
   });
 
   afterAll(function() {

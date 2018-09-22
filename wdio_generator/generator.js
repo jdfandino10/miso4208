@@ -53,17 +53,23 @@ class Generator {
          * @param {Array.<String>} specs List of spec file paths that are to be run
          */
         before: '__BEFORE__FUNC__',
+        // after: '__AFTER__FUNC__',
     };
     this.baseCopy = this.baseSpec;
   }
 
   toString() {
-    let str = JSON.stringify(this.baseCopy);
-    let fun = emptyFunc;
+    let str = JSON.stringify(this.baseCopy, null, 2);
+
+    let beforeFun = emptyFunc;
     if (this.beforeFunc) {
-      fun = this.beforeFunc;
+      beforeFun = this.beforeFunc;
     }
-    str = str.replace('"__BEFORE__FUNC__"', fun);
+    str = str.replace('"__BEFORE__FUNC__"', beforeFun);
+
+    // let afterFun = 'function () { browser.saveScreenshot([\'./snapshot.png\']); }';
+    // str = str.replace('"__AFTER__FUNC__"', afterFun)
+
     str = 'exports.config = ' + str;
     return str;
   }
@@ -87,7 +93,7 @@ class Generator {
     if (!Array.isArray(specsArr)) {
       specsArr = [specsArr];
     }
-    this.baseCopy.spec = specsArr;
+    this.baseCopy.specs = specsArr;
     return this;
   }
 
@@ -142,18 +148,18 @@ class Generator {
 
   generate(request, projectPath) {
     if (request.type === 'bdt-web') {
-      this.setSpecs(['./features/**/*.feature'])
+      this.setSpecs([projectPath + '/features/**/*.feature'])
         .setCucumber(projectPath + '/features/step-definitions');
     } else if (request.type === 'headless-web') {
-      this.setSpecs(['./test/**/*.js']);
+      this.setSpecs([projectPath + '/test/**/*.js']);
     } else if (request.type === 'random-web') {
-      this.setSpecs(['./random/test/**/*.js']);
+      this.setSpecs([projectPath + '/random/test/**/*.js']);
     }
     this.setUrl(request.url)
-      .setBrowser(request.environment.browser)
-      .setWindowSize(request.environment.viewport);
+        .setBrowser(request.environment.browser)
+        .setWindowSize(request.environment.viewport);
     const jsonResults = this.toString();
-    fs.writeFileSync(projectPath + '/wdio.config.json', jsonResults);
+    fs.writeFileSync(projectPath + '/wdio.conf.js', jsonResults);
   }
 }
 
