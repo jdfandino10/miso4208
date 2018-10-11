@@ -13,13 +13,14 @@ app.get('/', function (_, res) {
 app.post('/test', function(req, res) {
     /**
      * {
-     *   email: <string>,
+     *   email: <string>, // for all types
      *   url: <string>,
-     *   gitUrl: <string>,
-     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web'},
+     *   compareUrl: <string>, // only for 'vrt'
+     *   gitUrl: <string>, // for  headless, randomweb, bdt
+     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt'},
      *   randomSeed: <number>,
      *   basePath: <string>,
-     *   gremlinsTTL: <number>,
+     *   gremlinsTTL: <number>, // only for 'random-web'
      *   environments: [
      *     {
      *       browser: {'chrome' | 'firefox'},
@@ -33,7 +34,7 @@ app.post('/test', function(req, res) {
      * }
      */
     var message = req.body;
-  
+
     message.id = uuidv4();
 
     const environments = message.environments;

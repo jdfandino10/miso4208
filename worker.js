@@ -2,12 +2,15 @@ const amqp = require('amqplib/callback_api');
 const fs = require('fs');
 const git = require('nodegit');
 const sgMail = require('@sendgrid/mail');
+const resemble = require('resemblejs');
 const config_generator = require('./wdio_generator/generator');
 const Launcher = require('webdriverio').Launcher;
 
 const WEB_TEST_KEY = '-web';
 const WEB_RANDOM_KEY = 'random-web';
+const WEB_VRT_KEY = 'vrt';
 const WEB_RANDOM_PATH = './random';
+const WEB_VRT_PATH = './vrt';
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const REQUEST_QUEUE_NAME = 'testing-request';
 const DEFAULT_GIT_REPOS_FOLDER = './gitRepos/';
@@ -69,13 +72,36 @@ function runTests(request, timestamp) {
 
     console.log('generated!');
 
-    if (request.type === WEB_RANDOM_KEY) {
+    if (request.type == WEB_VRT_KEY) {
+      return runVrtTest(request, timestamp);
+    } else if (request.type === WEB_RANDOM_KEY) {
         return runRandomWebTest(request, timestamp);
     } else if (request.type.endsWith(WEB_TEST_KEY)) {
         return runWebTests(request, timestamp);
     } else {
         return runAndroidTest(request, timestamp);
     }
+}
+
+function regression(imgPath1, imgPath2, outputFile) {
+  let img1 = imgPath1;
+  let img2 = imgPath2;
+  img1 = path.join(__dirname + img1);
+  img2 = path.join(__dirname + img2);
+
+  return resemble(img1).compareTo(img2)
+  .onComplete((data) => {
+    return fs.writeFile(outputFile, data.getBuffer(), () => {
+      // TODO: Do something with results
+    });
+  });
+}
+
+function runVrtTest(request, timestamp) {
+    replaceTemplateTask(request, './vrt/test/specs/vrt');
+    return runWebTests(request, timestamp).then(() => {
+      return regression(imgPath1, imgPath2, outputFile);
+    });
 }
 
 function runRandomWebTest(request, timestamp) {
@@ -91,11 +117,11 @@ function replaceTemplateTask(request, path) {
     }
 
     fs.writeFileSync(path + '.js', data, 'utf8');
-    console.log(' [x] Gremlins template generated sucessfully');
+    console.log(' [x] ' + path + ' template generated sucessfully');
 }
 
 function downloadGitRepository(request, timestamp) {
-    if (request.type !== WEB_RANDOM_KEY) {    
+    if (request.type !== WEB_RANDOM_KEY && request.gitUrl) {
         console.log(' [*] Downloading Git repository: ' + request.gitUrl);
 
         createMissingFolderIfRequired(DEFAULT_GIT_REPOS_FOLDER);
@@ -108,6 +134,9 @@ function downloadGitRepository(request, timestamp) {
 }
 
 function parseFolderName(gitUrl) {
+    if (!gitUrl) {
+      return "";
+    }
     var n = gitUrl.length;
     gitUrl = gitUrl.endsWith('/') ? gitUrl.substring(0, n-1) : gitUrl;
     var index = gitUrl.lastIndexOf('/');
@@ -115,11 +144,11 @@ function parseFolderName(gitUrl) {
 }
 
 function getProjectPath(request, timestamp, useBasePath = false) {
-    if (request.type !== WEB_RANDOM_KEY) {
+    if (request.type !== WEB_RANDOM_KEY && request.type !== WEB_VRT_KEY) {
         const basePath = useBasePath && request.basePath ? '/' + request.basePath : '';
         return DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + '_' + request.environmentId + '_' + timestamp + basePath;
     } else {
-        return WEB_RANDOM_PATH;
+        return request.type === WEB_RANDOM_KEY ? WEB_RANDOM_PATH : WEB_VRT_PATH;
     }
 }
 

@@ -1,0 +1,15 @@
+describe('VRT', function() {
+
+  it('it should take screenshot from url 1', function() {
+    browser.url('<<<url>>>');
+    // save screenshot to file
+    browser.saveScreenshot('./<<<id>>>_snapshot_1.png');
+  });
+
+  it('it should take screenshot from url 2', function() {
+    browser.url('<<<compareUrl>>>');
+    // save screenshot to file
+    browser.saveScreenshot('./<<<id>>>_snapshot_2.png');
+  });
+
+});
