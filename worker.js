@@ -1,6 +1,7 @@
 const amqp = require('amqplib/callback_api');
 const fs = require('fs');
 const git = require('nodegit');
+const path = require('path');
 const sgMail = require('@sendgrid/mail');
 const resemble = require('resemblejs');
 const config_generator = require('./wdio_generator/generator');
@@ -84,22 +85,24 @@ function runTests(request, timestamp) {
 }
 
 function regression(imgPath1, imgPath2, outputFile) {
-  let img1 = imgPath1;
-  let img2 = imgPath2;
-  img1 = path.join(__dirname + img1);
-  img2 = path.join(__dirname + img2);
+  console.log("WATHATWATHAHTAHT");
+  console.log(imgPath1);
+  console.log(imgPath2);
+  console.log("(#)@$*)(@#UDJSAKOFJASIOJDOAISDJSAOIJ");
 
-  return resemble(img1).compareTo(img2)
-  .onComplete((data) => {
-    return fs.writeFile(outputFile, data.getBuffer(), () => {
-      // TODO: Do something with results
-    });
+  return resemble(imgPath1).compareTo(imgPath2).onComplete((data) => {
+    fs.writeFileSync(outputFile, data.getBuffer());
   });
 }
 
 function runVrtTest(request, timestamp) {
+    createMissingFolderIfRequired('./vrtShots');
+
     replaceTemplateTask(request, './vrt/test/specs/vrt');
     return runWebTests(request, timestamp).then(() => {
+      var imgPath1 = './vrtShots/' + request.id + '_snapshot_1.png';
+      var imgPath2 = './vrtShots/' + request.id + '_snapshot_2.png';
+      var outputFile = './vrtShots/' + request.id + '_output.png';
       return regression(imgPath1, imgPath2, outputFile);
     });
 }
@@ -113,7 +116,9 @@ function replaceTemplateTask(request, path) {
     data = fs.readFileSync(path + '.template', 'utf8');
 
     for (key in request) {
-        data = data.replace('<<<' + key + '>>>', request[key]);
+        var pattern = '<<<' + key + '>>>'
+        var re = new RegExp(pattern, "g");
+        data = data.replace(re, request[key]);
     }
 
     fs.writeFileSync(path + '.js', data, 'utf8');

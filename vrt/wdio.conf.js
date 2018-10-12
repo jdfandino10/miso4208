@@ -1,6 +1,6 @@
 exports.config = {
   "specs": [
-    "./test/specs/**/*.js"
+    "./vrt/test/specs/vrt.js"
   ],
   "exclude": [],
   "maxInstances": 10,
@@ -40,5 +40,5 @@ exports.config = {
     height: 500
   });
 },
-  "baseUrl": "losestudiantes.co"
+  "baseUrl": "https://twitter.com"
 }
