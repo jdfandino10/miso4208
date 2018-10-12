@@ -1,5 +1,7 @@
 node_modules/
 uploadedFiles/
+errorShots/
+vrtShots/
 gitRepos/
 results/
 .DS_Store
