@@ -30,6 +30,7 @@
     "json-pretty-html": "^1.1.2",
     "mochawesome": "^3.0.3",
     "nodegit": "^0.22.2",
+    "resemblejs": "^2.10.3",
     "uuid": "^3.3.2",
     "webdriverio": "^4.13.2"
   },
