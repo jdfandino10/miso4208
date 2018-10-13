@@ -7,7 +7,7 @@ const compare = require('resemblejs').compare;
 const sgMail = require('@sendgrid/mail');
 
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'amqp://localhost';
-const REQUEST_QUEUE_NAME = process.env.RABBITMQ_QUEUE || 'testing-request';
+const REQUEST_QUEUE_NAME = process.env.RABBITMQ_QUEUE || 'testing-request-durable';
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const FROM_DEFAULT_EMAIL = 'jc.bages10@uniandes.edu.co';
@@ -41,7 +41,7 @@ function init() {
             console.log(' [x] There was an connecting to host=%s: %s', RABBITMQ_HOST, err);
         } else {
             conn.createChannel((_, channel) => {
-                channel.assertQueue(REQUEST_QUEUE_NAME, { durable: false });
+                channel.assertQueue(REQUEST_QUEUE_NAME, { durable: true });
                 channel.prefetch(1, false);
                 console.log(' [x] Connected to the request queue host=%s', RABBITMQ_HOST);
                 processNextQueueMessage(channel);

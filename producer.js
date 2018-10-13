@@ -1,6 +1,6 @@
 const amqp = require('amqplib/callback_api');
 
-const REQUEST_QUEUE_NAME = 'testing-request';
+const REQUEST_QUEUE_NAME = process.env.RABBITMQ_QUEUE || 'testing-request-durable';
 
 var rabbitChannel;
 
