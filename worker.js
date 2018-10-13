@@ -36,13 +36,17 @@ function init() {
     createMissingFolders(WebAssets);
 
     sgMail.setApiKey(SENDGRID_API_KEY);
-    amqp.connect(RABBITMQ_HOST, (_, conn) => {
-        conn.createChannel((_, channel) => {
-            channel.assertQueue(REQUEST_QUEUE_NAME, { durable: false });
-            channel.prefetch(1, false);
-            console.log(' [x] Connected to the request queue');
-            processNextQueueMessage(channel);
-        });
+    amqp.connect(RABBITMQ_HOST, (err, conn) => {
+        if (err) {
+            console.log(' [x] There was an connecting to host=%s: %s', RABBITMQ_HOST, err);
+        } else {
+            conn.createChannel((_, channel) => {
+                channel.assertQueue(REQUEST_QUEUE_NAME, { durable: false });
+                channel.prefetch(1, false);
+                console.log(' [x] Connected to the request queue host=%s', RABBITMQ_HOST);
+                processNextQueueMessage(channel);
+            });
+        }
     });
 }
 
