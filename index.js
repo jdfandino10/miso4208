@@ -15,6 +15,7 @@ app.post('/test', (req, res) => {
      * {
      *   email: <string>, // for all types
      *   url: <string>,
+     *   baseId: <string>, // only for 'vrt'
      *   compareUrl: <string>, // only for 'vrt'
      *   gitUrl: <string>, // for  headless, randomweb, bdt
      *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt'},
