@@ -4,13 +4,13 @@ const uuidv4 = require('uuid/v4');
 const bodyParser = require('body-parser');
 
 const app = express();
-app.use(bodyParser.json())
+app.use(bodyParser.json());
 
-app.get('/', function (_, res) {
+app.get('/', (_, res) => {
     res.json({ msg: 'Up and running :D' });
 });
 
-app.post('/test', function(req, res) {
+app.post('/test', (req, res) => {
     /**
      * {
      *   email: <string>, // for all types
@@ -44,34 +44,8 @@ app.post('/test', function(req, res) {
         producer.sendMessage(message);
     });
 
-    res.json({ msg: 'Test are running. Check your email with the results as soon as they are ready' });
+    res.json({ msg: 'Test are running. Check your email with the results as soon as they are ready.' });
 });
-
-app.get('/random/web', function(req,res)
-{
-    var resolution = req.header("resolution");
-    var resSplit = resolution.split('x');
-    var width = resSplit[0];
-    var height = resSplit[1];
-    var url=req.header("url");
-    var browser=req.header("browser");
-    var id = new Date().getTime();
-    var email=req.header("email");
-    var number=req.header("number");
-    var type="random-web"
-    var seed=req.header("seed");
-    var m = {
-        type: type,
-        id: id,
-        email: email,
-        width: width,
-        height: height,
-        browser:browser,
-        seed:seed,
-        number:number
-      };
-    producer.sendMessage(m);
-})
 
 producer.init().then(() => {
     app.listen(3000);
