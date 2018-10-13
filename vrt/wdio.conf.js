@@ -20,7 +20,7 @@ exports.config = {
   "coloredLogs": true,
   "deprecationWarnings": true,
   "bail": 0,
-  "screenshotPath": "./errorShots/",
+  "screenshotPath": "./errorShots/203e952a-84f0-4b7d-992d-f8b21344f8f2",
   "waitforTimeout": 10000,
   "connectionRetryTimeout": 90000,
   "connectionRetryCount": 3,
@@ -29,16 +29,22 @@ exports.config = {
   ],
   "framework": "jasmine",
   "reporters": [
-    "dot"
+    "dot",
+    "html"
   ],
   "jasmineNodeOpts": {
     "defaultTimeoutInterval": 10000
   },
   "before": function (capabilities, specs) {
   browser.setViewportSize({
-    width: 500,
-    height: 500
+    width: 1366,
+    height: 768
   });
 },
-  "baseUrl": "https://twitter.com"
+  "baseUrl": "https://losestudiantes.co",
+  "reporterOptions": {
+    "html": {
+      "outFile": "./report/203e952a-84f0-4b7d-992d-f8b21344f8f2.html"
+    }
+  }
 }
