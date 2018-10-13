@@ -223,8 +223,9 @@ function runBdtTest(request, timestamp) {
 
 function runWebTests(request, timestamp) {
     const projectPath = getProjectPath(request, timestamp, true);
-    console.log(' [x] Running a web test with wdio path=%s', projectPath);
-    const wdio = new Launcher(`${projectPath}/wdio.conf.js`);
+    const configFileName = `wdio.${request.environmentId}.conf.js`;
+    console.log(' [x] Running a web test with wdio path=%s/%s', projectPath, configFileName);
+    const wdio = new Launcher(`${projectPath}/${configFileName}`);
     return wdio.run();
 }
 

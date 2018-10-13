@@ -186,7 +186,8 @@ class Generator {
     }
 
     const jsonResults = this.toString();
-    fs.writeFileSync(projectPath + '/wdio.conf.js', jsonResults);
+    const configFileName = `wdio.${request.environmentId}.conf.js`;
+    fs.writeFileSync(`${projectPath}/${configFileName}`, jsonResults);
   }
 }
 
