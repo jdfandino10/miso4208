@@ -20,7 +20,7 @@ exports.config = {
   "coloredLogs": true,
   "deprecationWarnings": true,
   "bail": 0,
-  "screenshotPath": "./errorShots/203e952a-84f0-4b7d-992d-f8b21344f8f2",
+  "screenshotPath": "./errorShots/3ab02ffa-04e4-44fb-87ec-87c161ea1e80",
   "waitforTimeout": 10000,
   "connectionRetryTimeout": 90000,
   "connectionRetryCount": 3,
@@ -37,14 +37,14 @@ exports.config = {
   },
   "before": function (capabilities, specs) {
   browser.setViewportSize({
-    width: 1366,
-    height: 768
+    width: 1000,
+    height: 1000
   });
 },
   "baseUrl": "https://losestudiantes.co",
   "reporterOptions": {
     "html": {
-      "outFile": "./report/203e952a-84f0-4b7d-992d-f8b21344f8f2.html"
+      "outFile": "./report/3ab02ffa-04e4-44fb-87ec-87c161ea1e80.html"
     }
   }
 }

@@ -64,8 +64,14 @@ function processNextQueueMessage(requestQueue) {
         const request = JSON.parse(queueMessage.content.toString());
         console.log(' [x] Received message id=%s, envid=%s', request.id, request.environmentId);
         processRequest(request)
-        .then(() => requestQueue.ack(queueMessage))
-        .catch(() => requestQueue.ack(queueMessage));
+        .then(() => {
+            console.log(' [x] Finished processing message id=%s, envid=%s', request.id, request.environmentId);
+            requestQueue.ack(queueMessage)
+        })
+        .catch((err) => {
+            console.log(' [x] An error occured processing message id=%s, envid=%s: %s', request.id, request.environmentId, err)
+            requestQueue.ack(queueMessage);
+        });
     }, { noAck: false });
 }
 
@@ -74,9 +80,7 @@ function processRequest(request) {
 
     return downloadGitRepository(request, timestamp)
     .then(() => runTests(request, timestamp))
-    .then((results) => sendResults(request, results))
-    .then(() => console.log(' [x] Finished processing message id=%s, envid=%s', request.id, request.environmentId))
-    .catch((err) => console.log(' [x] An error occured processing message id=%s: %s', request.id, err))
+    .then((results) => sendResults(request, results));
 }
 
 function needToDownloadGitRepo(request) {
