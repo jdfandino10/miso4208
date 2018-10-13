@@ -6,12 +6,15 @@ const sgMail = require('@sendgrid/mail');
 const resemble = require('resemblejs');
 const config_generator = require('./wdio_generator/generator');
 const Launcher = require('webdriverio').Launcher;
+const exec = require('child_process').execSync;
 
 const WEB_TEST_KEY = '-web';
 const WEB_RANDOM_KEY = 'random-web';
 const WEB_VRT_KEY = 'vrt';
+const WEB_MUTATION_KEY = 'mutation-web';
 const WEB_RANDOM_PATH = './random';
 const WEB_VRT_PATH = './vrt';
+const WEB_MUTATION_PATH = './mutation';
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const REQUEST_QUEUE_NAME = 'testing-request';
 const DEFAULT_GIT_REPOS_FOLDER = './gitRepos/';
@@ -21,6 +24,7 @@ const FROM_DEFAULT_EMAIL = 'jc.bages10@uniandes.edu.co';
 
 function init() {
     sgMail.setApiKey(SENDGRID_API_KEY);
+    console.log("KEY:" + SENDGRID_API_KEY);
 
     amqp.connect('amqp://localhost', function(_, conn) {
         conn.createChannel(function (_, channel) {
@@ -30,6 +34,7 @@ function init() {
         });
     });
 }
+
 
 function createMissingFolderIfRequired(path) {
     if (!fs.existsSync(path)) {
@@ -67,21 +72,44 @@ function processRequest(request) {
 function runTests(request, timestamp) {
     console.log(' [*] Running test of type: ' + request.type);
 
-    const wdioGenerator = new config_generator();
-    const projectPath = getProjectPath(request, timestamp, true);
+    var wdioGenerator;
+    var projectPath;
+    if(request.type!=WEB_MUTATION_KEY)
+    {
+        wdioGenerator = new config_generator();
+        projectPath= getProjectPath(request, timestamp, true);
     wdioGenerator.generate(request, projectPath);
-
-    console.log('generated!');
+        console.log('generated wdio config!');
+    }
 
     if (request.type == WEB_VRT_KEY) {
       return runVrtTest(request, timestamp);
     } else if (request.type === WEB_RANDOM_KEY) {
         return runRandomWebTest(request, timestamp);
+    } else if (request.type == WEB_MUTATION_KEY) {
+        return runMutationWebTest(request, timestamp);
     } else if (request.type.endsWith(WEB_TEST_KEY)) {
         return runWebTests(request, timestamp);
     } else {
         return runAndroidTest(request, timestamp);
     }
+}
+
+function runMutationWebTest(request, timestamp) {
+console.log("run mutation");
+var projectPath=getProjectPath(request, timestamp);
+exec("npm --prefix "+projectPath+" install "+projectPath)
+// fs.renameSync("package.json","package.jsonbak");
+// fs.copyFileSync(projectPath+"/package.json","package.json");
+// exec("npm install");
+// fs.unlinkSync("package.json");
+// fs.renameSync("package.jsonbak","package.json");
+request.projectPath=projectPath;
+replaceTemplateTask(request, WEB_MUTATION_PATH + "/stryker.conf");
+replaceTemplateTask(request, WEB_MUTATION_PATH + "/karma.conf");
+//fs.renameSync(WEB_MUTATION_PATH + "/karma.conf.js",projectPath+ "/karma.conf.js");
+//fs.renameSync(WEB_MUTATION_PATH + "/stryker.conf.js",projectPath+ "/stryker.conf.js");
+exec("stryker run "+WEB_MUTATION_PATH+"/stryker.conf.js");
 }
 
 function regression(imgPath1, imgPath2, outputFile) {
@@ -149,10 +177,14 @@ function parseFolderName(gitUrl) {
 }
 
 function getProjectPath(request, timestamp, useBasePath = false) {
-    if (request.type !== WEB_RANDOM_KEY && request.type !== WEB_VRT_KEY) {
+    if(request.type == WEB_MUTATION_KEY) {
+        return DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + '_' + timestamp;
+    }
+    else if (request.type !== WEB_RANDOM_KEY && request.type !== WEB_VRT_KEY) {
         const basePath = useBasePath && request.basePath ? '/' + request.basePath : '';
         return DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + '_' + request.environmentId + '_' + timestamp + basePath;
-    } else {
+    }
+    else {
         return request.type === WEB_RANDOM_KEY ? WEB_RANDOM_PATH : WEB_VRT_PATH;
     }
 }
@@ -201,7 +233,7 @@ function sendResults(request, results) {
     return sgMail.send({
         to: request.email,
         from: FROM_DEFAULT_EMAIL,
-        subject: 'Cypress test results',
+        subject: 'Top Testing Tool Test results',
         text: 'Check your results in the attachment',
         html: '<p>Check your results in the attachment</p>'
     });

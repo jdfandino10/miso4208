@@ -1,0 +1,24 @@
+module.exports = function (config) {
+	'use strict';
+
+	config.set({
+		frameworks: ['jasmine'],
+		files: [
+			'../<<<projectPath>>>/node_modules/angular/angular.js',
+			'../<<<projectPath>>>/node_modules/angular-route/angular-route.js',
+			'../<<<projectPath>>>/node_modules/angular-resource/angular-resource.js',
+			'../<<<projectPath>>>/node_modules/angular-mocks/angular-mocks.js',
+			"../<<<projectPath>>>/<<<mutatePath>>>/**",
+			"../<<<projectPath>>>/<<<testPath>>>/**",
+		],
+		autoWatch: true,
+		singleRun: false,
+		browsers: ['ChromeHeadless'],
+		customLaunchers: {
+			ChromeHeadless: {
+			  base: 'Chrome',
+			  flags: ['--headless','--disable-gpu','--remote-debugging-port=9222' ],
+			}
+		  }
+	});
+};

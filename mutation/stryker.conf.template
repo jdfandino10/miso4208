@@ -1,0 +1,18 @@
+module.exports = function(config) {
+  config.set({
+    mutator: "javascript",
+    packageManager: "npm",
+    reporters: ["html", "clear-text", "progress"],
+    testRunner: "karma",
+    transpilers: [],
+    testFramework: "jasmine",
+    coverageAnalysis: "perTest",
+    karma: {
+      projectType: "custom",
+      configFile: "mutation/karma.conf.js",
+      config: {}
+    },
+    mutate: ["<<<projectPath>>>/<<<mutatePath>>>/**"],
+    files:["<<<projectPath>>>/**", "mutation/karma.conf.js", ]
+  });
+};
