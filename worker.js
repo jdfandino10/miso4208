@@ -1,98 +1,234 @@
 const amqp = require('amqplib/callback_api');
+const config_generator = require('./wdio_generator/generator');
 const fs = require('fs');
 const git = require('nodegit');
-const path = require('path');
-const sgMail = require('@sendgrid/mail');
-const resemble = require('resemblejs');
-const config_generator = require('./wdio_generator/generator');
 const Launcher = require('webdriverio').Launcher;
+const compare = require('resemblejs').compare;
 const exec = require('child_process').execSync;
+const sgMail = require('@sendgrid/mail');
 
-const WEB_TEST_KEY = '-web';
-const WEB_RANDOM_KEY = 'random-web';
-const WEB_VRT_KEY = 'vrt';
-const WEB_MUTATION_KEY = 'mutation-web';
-const WEB_RANDOM_PATH = './random';
-const WEB_VRT_PATH = './vrt';
-const WEB_MUTATION_PATH = './mutation';
+const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'amqp://localhost';
+const REQUEST_QUEUE_NAME = process.env.RABBITMQ_QUEUE || 'testing-request-durable';
+
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
-const REQUEST_QUEUE_NAME = 'testing-request';
-const DEFAULT_GIT_REPOS_FOLDER = './gitRepos/';
-const DEFAULT_RESULTS_FOLDER = './results/'
 const FROM_DEFAULT_EMAIL = 'jc.bages10@uniandes.edu.co';
 
+const WebTask = {
+    HEADLESS: 'headless-web',
+    RANDOM: 'random-web',
+    BDT: 'bdt-web',
+    VRT: 'vrt-web',
+    MUTATION: 'mutation-web'
+};
+
+const WebPath = {
+    RANDOM: './random',
+    VRT: './vrt',
+    GIT: './gitRepos',
+    MUTATION: './mutation'
+};
+
+const WebAssets = {
+    SCREENSHOTS: './errorShots',
+    VRT: './vrtShots',
+    REPORT: './report',
+    MUTATION_REPORT: './reports/mutation/html'
+};
 
 function init() {
-    sgMail.setApiKey(SENDGRID_API_KEY);
-    console.log("KEY:" + SENDGRID_API_KEY);
+    createMissingFolders(WebPath);
+    createMissingFolders(WebAssets);
 
-    amqp.connect('amqp://localhost', function(_, conn) {
-        conn.createChannel(function (_, channel) {
-            channel.assertQueue(REQUEST_QUEUE_NAME, { durable: false });
-            console.log(' [*] Connected to the request queue');
-            processNextQueueMessage(channel);
-        });
+    sgMail.setApiKey(SENDGRID_API_KEY);
+    amqp.connect(RABBITMQ_HOST, (err, conn) => {
+        if (err) {
+            console.log(' [x] There was an connecting to host=%s: %s', RABBITMQ_HOST, err);
+        } else {
+            conn.createChannel((_, channel) => {
+                channel.assertQueue(REQUEST_QUEUE_NAME, { durable: true });
+                channel.prefetch(1, false);
+                console.log(' [x] Connected to the request queue host=%s', RABBITMQ_HOST);
+                processNextQueueMessage(channel);
+            });
+        }
     });
 }
 
-
-function createMissingFolderIfRequired(path) {
-    if (!fs.existsSync(path)) {
-        fs.mkdirSync(path);
+function createMissingFolders(keyValue) {
+    for (key in keyValue) {
+        const path = keyValue[key];
+        if (!fs.existsSync(path)) {
+            fs.mkdirSync(path);
+        }
     }
 }
 
 function processNextQueueMessage(requestQueue) {
-    requestQueue.consume(REQUEST_QUEUE_NAME, function(queueMessage) {
-        var request = JSON.parse(queueMessage.content.toString());
-        console.log(' [x] Received message id=%s', request.id);
-        processRequest(request);
-    }, { noAck: true });
+    requestQueue.consume(REQUEST_QUEUE_NAME, (queueMessage) => {
+        const request = JSON.parse(queueMessage.content.toString());
+        console.log(' [x] Received message id=%s, envid=%s', request.id, request.environmentId);
+        processRequest(request)
+        .then(() => requestQueue.ack(queueMessage))
+        .catch(() => requestQueue.ack(queueMessage));
+    }, { noAck: false });
 }
 
 function processRequest(request) {
-    console.log(' [*] processRequest for request');
-    console.log(request);
-
-    var timestamp = new Date().getTime();
+    const timestamp = new Date().getTime();
 
     return downloadGitRepository(request, timestamp)
-        .then(function () { return runTests(request, timestamp); })
-        .then(function (results) { return sendResults(request, results); })
-        .then(function () {
-            // cleanRepository(request, timestamp);
-            console.log(' [x] Finished processing message id=%s', request.id);
-        })
-        .catch(function (err) {
-            // cleanRepository(request, timestamp);
-            console.log(' [x] An error occured processing message id=%s: %s', request.id, err);
-        });
+    .then(() => runTests(request, timestamp))
+    .then((results) => sendResults(request, results))
+    .then(() => console.log(' [x] Finished processing message id=%s, envid=%s', request.id, request.environmentId))
+    .catch((err) => console.log(' [x] An error occured processing message id=%s: %s', request.id, err))
+}
+
+function needToDownloadGitRepo(request) {
+    const isValidRequestType = request.type === WebTask.HEADLESS || request.type === WebTask.BDT || request.type === WebTask.MUTATION;
+    return request.gitUrl && isValidRequestType;
+}
+
+function getProjectPath(request, timestamp, useBasePath = false) {
+    function parseFolderName(gitUrl) {
+        if (!gitUrl) {
+            return '';
+        } else {
+            const urlLength = gitUrl.length;
+            const formattedGitUrl = gitUrl.endsWith('/') ? gitUrl.substring(0, urlLength-1) : gitUrl;
+            const index = formattedGitUrl.lastIndexOf('/');
+            return formattedGitUrl.substring(index + 1);
+        }
+    }
+
+    if (needToDownloadGitRepo(request)) {
+        const basePath = useBasePath && request.basePath ? `/${request.basePath}` : '';
+        const folderName = parseFolderName(request.gitUrl);
+        if(request.type==WebTask.MUTATION)
+        {
+        return `${WebPath.GIT}/${folderName}_${timestamp}${basePath}`;
+        }
+        return `${WebPath.GIT}/${folderName}_${request.environmentId}_${timestamp}${basePath}`;
+    } else {
+        switch (request.type) {
+            case WebTask.RANDOM:
+                return WebPath.RANDOM;
+            case WebTask.VRT:
+                return WebPath.VRT;
+        }
+    }
+}
+
+function downloadGitRepository(request, timestamp) {
+    if (needToDownloadGitRepo(request)) {
+        const projectPath = getProjectPath(request, timestamp);
+        console.log(' [x] Downloading Git repository url=%s on path=%s', request.gitUrl, projectPath);
+        return git.Clone(request.gitUrl, projectPath);
+    } else {
+        console.log(' [x] No need to download Git repository');
+        return Promise.resolve();
+    }
+}
+
+function replaceTemplateTask(request, path) {
+    let data = fs.readFileSync(`${path}.template`, 'utf8');
+
+    for (key in request) {
+        const pattern = `<<<${key}>>>`;
+        const regex = new RegExp(pattern, 'g');
+        data = data.replace(regex, request[key]);
+    }
+
+    fs.writeFileSync(`${path}.js`, data, 'utf8');
+    console.log(' [x] Template generated sucessfully for path=%s', path);
 }
 
 function runTests(request, timestamp) {
-    console.log(' [*] Running test of type: ' + request.type);
+    console.log(' [x] Running test type=%s', request.type);
 
     var wdioGenerator;
     var projectPath;
-    if(request.type!=WEB_MUTATION_KEY)
+    if(request.type!=WebTask.MUTATION)
     {
         wdioGenerator = new config_generator();
         projectPath= getProjectPath(request, timestamp, true);
     wdioGenerator.generate(request, projectPath);
-        console.log('generated wdio config!');
+        console.log('generated wdio.conf.js!');
     }
 
-    if (request.type == WEB_VRT_KEY) {
-      return runVrtTest(request, timestamp);
-    } else if (request.type === WEB_RANDOM_KEY) {
-        return runRandomWebTest(request, timestamp);
-    } else if (request.type == WEB_MUTATION_KEY) {
-        return runMutationWebTest(request, timestamp);
-    } else if (request.type.endsWith(WEB_TEST_KEY)) {
-        return runWebTests(request, timestamp);
-    } else {
-        return runAndroidTest(request, timestamp);
+    switch (request.type) {
+        case WebTask.VRT:
+            return runVrtTest(request, timestamp);
+        case WebTask.RANDOM:
+            return runRandomTest(request, timestamp);
+        case WebTask.HEADLESS:
+            return runHeadlessTest(request, timestamp);
+        case WebTask.BDT:
+            return runBdtTest(request, timestamp);
+        case WebTask.MUTATION:
+            return runMutationWebTest(request, timestamp);
     }
+}
+
+function runVrtTest(request, timestamp) {
+    function getVrtResults(imgPath1, imgPath2, outputFile) {
+        return {
+            images: [
+                { path: imgPath1, filename: 'url.png', type: 'image/png' },
+                { path: imgPath2, filename: 'compareUrl.png', type: 'image/png' },
+                { path: outputFile, filename: 'results.png', type: 'image/png' }
+            ]
+        };
+    }
+    
+    function regression(imgPath1, imgPath2, outputFile) {
+        return new Promise((resolve, reject) => {
+            compare(imgPath1, imgPath2, {}, (err, data) => {
+                if (err) reject(err);
+                fs.writeFileSync(outputFile, data.getBuffer());
+                const results = getVrtResults(imgPath1, imgPath2, outputFile);
+                resolve(results);
+            });
+        });
+    }
+
+    replaceTemplateTask(request, `${WebPath.VRT}/test/specs/vrt`);
+    return runWebTests(request, timestamp).then(() => {
+        const imgPath1 = `${WebAssets.VRT}/${request.environmentId}_snapshot_1.png`;
+        const imgPath2 = `${WebAssets.VRT}/${request.environmentId}_snapshot_2.png`;
+        const outputFile = `${WebAssets.VRT}/${request.environmentId}_output.png`;
+        return regression(imgPath1, imgPath2, outputFile);
+    });
+}
+
+function runRandomTest(request, timestamp) {
+    function getRandomResults() {
+        return { images: [] };
+    }
+
+    replaceTemplateTask(request, `${WebPath.RANDOM}/test/specs/gremlins`);
+    return runWebTests(request, timestamp).then(getRandomResults);
+}
+
+function runHeadlessTest(request, timestamp) {
+    function getHeadlessResults() {
+        const screenShotsPath = `${WebAssets.SCREENSHOTS}/${request.environmentId}`;
+        const images = fs.readdirSync(screenShotsPath).map(imagePath => ({
+            path: `${screenShotsPath}/${imagePath}`,
+            filename: imagePath,
+            type: 'image/png'
+        }));
+        return { images: images };
+    }
+
+    return runWebTests(request, timestamp).then(getHeadlessResults);
+}
+
+function runBdtTest(request, timestamp) {
+    function getBdtResults() {
+        return { images: [] };
+    }
+
+    return runWebTests(request, timestamp).then(getBdtResults);
 }
 
 function runMutationWebTest(request, timestamp) {
@@ -105,146 +241,57 @@ exec("npm --prefix "+projectPath+" install "+projectPath)
 // fs.unlinkSync("package.json");
 // fs.renameSync("package.jsonbak","package.json");
 request.projectPath=projectPath;
-replaceTemplateTask(request, WEB_MUTATION_PATH + "/stryker.conf");
-replaceTemplateTask(request, WEB_MUTATION_PATH + "/karma.conf");
-//fs.renameSync(WEB_MUTATION_PATH + "/karma.conf.js",projectPath+ "/karma.conf.js");
-//fs.renameSync(WEB_MUTATION_PATH + "/stryker.conf.js",projectPath+ "/stryker.conf.js");
-exec("stryker run "+WEB_MUTATION_PATH+"/stryker.conf.js");
-}
-
-function regression(imgPath1, imgPath2, outputFile) {
-  console.log("WATHATWATHAHTAHT");
-  console.log(imgPath1);
-  console.log(imgPath2);
-  console.log("(#)@$*)(@#UDJSAKOFJASIOJDOAISDJSAOIJ");
-
-  return resemble(imgPath1).compareTo(imgPath2).onComplete((data) => {
-    fs.writeFileSync(outputFile, data.getBuffer());
-  });
-}
-
-function runVrtTest(request, timestamp) {
-    createMissingFolderIfRequired('./vrtShots');
-
-    replaceTemplateTask(request, './vrt/test/specs/vrt');
-    return runWebTests(request, timestamp).then(() => {
-      var imgPath1 = './vrtShots/' + request.id + '_snapshot_1.png';
-      var imgPath2 = './vrtShots/' + request.id + '_snapshot_2.png';
-      var outputFile = './vrtShots/' + request.id + '_output.png';
-      return regression(imgPath1, imgPath2, outputFile);
-    });
-}
-
-function runRandomWebTest(request, timestamp) {
-    replaceTemplateTask(request, './random/test/specs/gremlins');
-    return runWebTests(request, timestamp);
-}
-
-function replaceTemplateTask(request, path) {
-    data = fs.readFileSync(path + '.template', 'utf8');
-
-    for (key in request) {
-        var pattern = '<<<' + key + '>>>'
-        var re = new RegExp(pattern, "g");
-        data = data.replace(re, request[key]);
-    }
-
-    fs.writeFileSync(path + '.js', data, 'utf8');
-    console.log(' [x] ' + path + ' template generated sucessfully');
-}
-
-function downloadGitRepository(request, timestamp) {
-    if (request.type !== WEB_RANDOM_KEY && request.gitUrl) {
-        console.log(' [*] Downloading Git repository: ' + request.gitUrl);
-
-        createMissingFolderIfRequired(DEFAULT_GIT_REPOS_FOLDER);
-
-        const projectPath = getProjectPath(request, timestamp);
-        return git.Clone(request.gitUrl, projectPath);
-    } else {
-        return Promise.resolve();
-    }
-}
-
-function parseFolderName(gitUrl) {
-    if (!gitUrl) {
-      return "";
-    }
-    var n = gitUrl.length;
-    gitUrl = gitUrl.endsWith('/') ? gitUrl.substring(0, n-1) : gitUrl;
-    var index = gitUrl.lastIndexOf('/');
-    return gitUrl.substring(index + 1);
-}
-
-function getProjectPath(request, timestamp, useBasePath = false) {
-    if(request.type == WEB_MUTATION_KEY) {
-        return DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + '_' + timestamp;
-    }
-    else if (request.type !== WEB_RANDOM_KEY && request.type !== WEB_VRT_KEY) {
-        const basePath = useBasePath && request.basePath ? '/' + request.basePath : '';
-        return DEFAULT_GIT_REPOS_FOLDER + parseFolderName(request.gitUrl) + '_' + request.environmentId + '_' + timestamp + basePath;
-    }
-    else {
-        return request.type === WEB_RANDOM_KEY ? WEB_RANDOM_PATH : WEB_VRT_PATH;
-    }
-}
-
-function cleanRepository(request, timestamp) {
-    console.log(' [*] Cleaning repository');
-
-    const projectPath = getProjectPath(request, timestamp);
-    deleteFolderRecursive(projectPath);
-}
-
-function deleteFolderRecursive(path) {
-    if (fs.existsSync(path)) {
-        fs.readdirSync(path).forEach(function (file, index) {
-            var currentPath = path + '/' + file;
-            if (fs.lstatSync(currentPath).isDirectory()) {
-                deleteFolderRecursive(currentPath);
-            } else {
-                fs.unlinkSync(currentPath);
-            }
-        });
-        fs.rmdirSync(path);
-    }
+replaceTemplateTask(request, WebPath.MUTATION + "/stryker.conf");
+replaceTemplateTask(request, WebPath.MUTATION + "/karma.conf");
+//fs.renameSync(WebPath.MUTATION + "/karma.conf.js",projectPath+ "/karma.conf.js");
+//fs.renameSync(WebPath.MUTATION + "/stryker.conf.js",projectPath+ "/stryker.conf.js");
+exec("stryker run "+WebPath.MUTATION+"/stryker.conf.js");
+return { images: [] };
 }
 
 function runWebTests(request, timestamp) {
-    console.log(' [*] Running a web test with wdio');
-
     const projectPath = getProjectPath(request, timestamp, true);
-    console.log(' [*] Project path: ' + projectPath);
-
-    var wdio = new Launcher(projectPath + '/wdio.conf.js');
+    console.log(' [x] Running a web test with wdio path=%s', projectPath);
+    const wdio = new Launcher(`${projectPath}/wdio.conf.js`);
     return wdio.run();
 }
 
-function runAndroidTest(request, timestamp) {
-    console.log(' [x] Android not supported, skipping test');
-}
-
 function sendResults(request, results) {
-    console.log(' [*] Sending Results to email: ' + request.email);
+    console.log(' [x] Sending results to email=%s, from email=%s', request.email, FROM_DEFAULT_EMAIL);
+    
+    function attachBase64Image(image) {
+        const bitmap = fs.readFileSync(image.path);
+        const base64Image = new Buffer(bitmap).toString('base64');
+        return {
+            content: base64Image,
+            filename: image.filename,
+            type: image.type,
+            disposition: 'attachment',
+            content_id: image.filename
+        };
+    }
 
-    var jsonResults = JSON.stringify({ results: results }, null, 2);
-    saveResultsSync(request, jsonResults);
+    function getHtmlString(task) {
+        if(task==WebTask.MUTATION)
+            {
+                const data = fs.readFileSync(`${WebAssets.REPORT}/.html`, 'utf-8');
+                return data.toString();
+            } 
+        const data = fs.readFileSync(`${WebAssets.MUTATION_REPORT}/index.html`, 'utf-8');
+        return data.toString();
+    }
 
-    return sgMail.send({
+    const mailObject = {
         to: request.email,
         from: FROM_DEFAULT_EMAIL,
         subject: 'Top Testing Tool Test results',
-        text: 'Check your results in the attachment',
-        html: '<p>Check your results in the attachment</p>'
-    });
-}
+        html: getHtmlString(request.WebTask),
+        attachments: results.images.map(attachBase64Image)
+    };
 
-function saveResultsSync(request, jsonResults) {
-    var currTime = new Date().getTime();
-    var fileName = parseFolderName(request.gitUrl) + '-' + currTime;
+    console.log(' [x] Sendgrid mail object=%s', JSON.stringify(mailObject, null, 2));
 
-    createMissingFolderIfRequired(DEFAULT_RESULTS_FOLDER);
-    fs.writeFileSync(DEFAULT_RESULTS_FOLDER + fileName + '.json', jsonResults);
+    return sgMail.send(mailObject);
 }
 
 init();

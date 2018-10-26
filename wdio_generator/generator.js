@@ -124,6 +124,15 @@ class Generator {
     return this;
   }
 
+  setHtmlReporter(request, htmlReporterPath) {
+    this.baseCopy.reporters.push('html');
+    this.baseCopy.reporterOptions = {
+      html: {
+        outFile: `${htmlReporterPath}/${request.environmentId}.html`
+      }
+    };
+  }
+
   setCucumber(featuresPath) {
     this.baseCopy.framework = 'cucumber';
     this.baseCopy.reporters = ['spec'];
@@ -146,7 +155,14 @@ class Generator {
     return this;
   }
 
-  generate(request, projectPath) {
+  setScreenShotsPath(request, screenShotsPath) {
+    this.baseCopy.screenshotPath = `${screenShotsPath}/${request.environmentId}`;
+    fs.mkdirSync(this.baseCopy.screenshotPath);
+  }
+
+  generate(request, projectPath, htmlReporterPath = null, screenShotsPath = null) {
+    console.log(' [x] Generating wdio.conf.js on type=%s and path=%s', request.type, projectPath);
+
     if (request.type === 'bdt-web') {
       this.setSpecs([projectPath + '/features/**/*.feature'])
         .setCucumber(projectPath + '/features/step-definitions');
@@ -154,12 +170,21 @@ class Generator {
       this.setSpecs([projectPath + '/test/**/*.js']);
     } else if (request.type === 'random-web') {
       this.setSpecs([projectPath + '/test/specs/gremlins.js']);
-    } else if (request.type === 'vrt') {
+    } else if (request.type === 'vrt-web') {
       this.setSpecs([projectPath + '/test/specs/vrt.js']);
     }
     this.setUrl(request.url)
         .setBrowser(request.environment.browser)
         .setWindowSize(request.environment.viewport);
+
+    if (htmlReporterPath) {
+      this.setHtmlReporter(request, htmlReporterPath);
+    }
+
+    if (screenShotsPath) {
+      this.setScreenShotsPath(request, screenShotsPath);
+    }
+
     const jsonResults = this.toString();
     fs.writeFileSync(projectPath + '/wdio.conf.js', jsonResults);
   }

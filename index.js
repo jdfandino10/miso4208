@@ -4,17 +4,18 @@ const uuidv4 = require('uuid/v4');
 const bodyParser = require('body-parser');
 
 const app = express();
-app.use(bodyParser.json())
+app.use(bodyParser.json());
 
-app.get('/', function (_, res) {
+app.get('/', (_, res) => {
     res.json({ msg: 'Up and running :D' });
 });
 
-app.post('/test', function(req, res) {
+app.post('/test', (req, res) => {
     /**
      * {
      *   email: <string>, // for all types
      *   url: <string>,
+     *   baseId: <string>, // only for 'vrt'
      *   compareUrl: <string>, // only for 'vrt'
      *   gitUrl: <string>, // for  headless, randomweb, bdt
      *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt' | 'mutation-web'},
@@ -44,7 +45,7 @@ app.post('/test', function(req, res) {
         producer.sendMessage(message);
     });
 
-    res.json({ msg: 'Test are running. Check your email with the results as soon as they are ready' });
+    res.json({ msg: 'Test are running. Check your email with the results as soon as they are ready.' });
 });
 
 app.post('/mutate', function(req, res) {
@@ -65,7 +66,6 @@ app.post('/mutate', function(req, res) {
 
     res.json({ msg: 'Mutation is running. Check your email with the results as soon as they are ready' });
 });
-
 producer.init().then(() => {
     app.listen(3000);
 });
