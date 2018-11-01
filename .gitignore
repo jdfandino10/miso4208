@@ -6,4 +6,5 @@ vrtShots/
 gitRepos/
 results/
 .DS_Store
-reports/
+vrt/wdio.*.conf.js
+vrt/test/specs/vrt.js
