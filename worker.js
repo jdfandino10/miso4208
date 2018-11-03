@@ -32,7 +32,7 @@ const WebAssets = {
     SCREENSHOTS: './errorShots',
     VRT: './vrtShots',
     REPORT: './report',
-    MUTATION_REPORT: './reports/mutation/html'
+    MUTATION_REPORT: './mutationReport'
 };
 
 function init() {
@@ -236,21 +236,21 @@ function runBdtTest(request, timestamp) {
 }
 
 function runMutationWebTest(request, timestamp) {
-console.log("run mutation");
-var projectPath=getProjectPath(request, timestamp);
-exec("npm --prefix "+projectPath+" install "+projectPath)
-// fs.renameSync("package.json","package.jsonbak");
-// fs.copyFileSync(projectPath+"/package.json","package.json");
-// exec("npm install");
-// fs.unlinkSync("package.json");
-// fs.renameSync("package.jsonbak","package.json");
-request.projectPath=projectPath;
-replaceTemplateTask(request, WebPath.MUTATION + "/stryker.conf");
-replaceTemplateTask(request, WebPath.MUTATION + "/karma.conf");
-//fs.renameSync(WebPath.MUTATION + "/karma.conf.js",projectPath+ "/karma.conf.js");
-//fs.renameSync(WebPath.MUTATION + "/stryker.conf.js",projectPath+ "/stryker.conf.js");
-exec("stryker run "+WebPath.MUTATION+"/stryker.conf.js");
-return { images: [] };
+    console.log("run mutation");
+    var projectPath = getProjectPath(request, timestamp);
+    exec("npm --prefix " + projectPath + " install " + projectPath);
+    // fs.renameSync("package.json","package.jsonbak");
+    // fs.copyFileSync(projectPath+"/package.json","package.json");
+    // exec("npm install");
+    // fs.unlinkSync("package.json");
+    // fs.renameSync("package.jsonbak","package.json");
+    request.projectPath = projectPath;
+    replaceTemplateTask(request, WebPath.MUTATION + '/stryker.conf');
+    replaceTemplateTask(request, WebPath.MUTATION + '/karma.conf');
+    //fs.renameSync(WebPath.MUTATION + "/karma.conf.js",projectPath+ "/karma.conf.js");
+    //fs.renameSync(WebPath.MUTATION + "/stryker.conf.js",projectPath+ "/stryker.conf.js");
+    exec('stryker run ' + WebPath.MUTATION + '/stryker.conf.js');
+    return { images: [] };
 }
 
 function runWebTests(request, timestamp) {
