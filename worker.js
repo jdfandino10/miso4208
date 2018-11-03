@@ -229,10 +229,11 @@ function runRandomTestAndroid(request, timestamp) {
             maxEvents: maxEvents
         };
     }
-    
+
     const promise = new Promise((resolve, _) => {
         const apkDir = downloadApk(request);
         try {
+            console.log(' [x] Trying to uninstall apk %s', request.package);
             exec(`adb uninstall ${request.package}`);
             console.log(' [x] Uninstalled apk %s', request.package);
         } catch (e) {
@@ -258,19 +259,29 @@ function runRandomTestAndroid(request, timestamp) {
             if (!fs.existsSync(videosPath)) {
                 fs.mkdirSync(videosPath);
             }
-            console.log(` [x] Saving video at ${videosPath}`);
-            exec(`adb pull /sdcard/monkey.mp4 ${path.join(videosPath, 'monkey.mp4')}`);
-            resolve();
+            console.log(` [x] Waiting 2 seconds for video to be ready...`);
+            setTimeout(() => {
+              console.log(` [x] Saving video at ${videosPath}`);
+              exec(`adb pull /sdcard/monkey.mp4 ${path.join(videosPath, 'monkey.mp4')}`);
+              resolve();
+            }, 2000);
         }
     });
 
     return promise.then(getAndroidRandomResults);
 }
 
+
 function runChaosTest(request, timestamp) {
     return new Promise((resolve, reject) => {
         replaceTemplateTask(request, './SimianArmy/src/main/resources/client', 'properties');
+        replaceTemplateTask(request, './SimianArmy/src/main/resources/chaos', 'properties');
+        replaceTemplateTask(request, './SimianArmy/src/main/resources/conformity', 'properties');
+        replaceTemplateTask(request, './SimianArmy/src/main/resources/janitor', 'properties');
+        replaceTemplateTask(request, './SimianArmy/src/main/resources/simianarmy', 'properties');
+        console.log(` [x] Starting simian army`);
         exec(".\\gradlew jettyRun", {cwd: '.\\SimianArmy'});
+        console.log(` [x] Done with simian army`);
     });
 }
 
@@ -313,7 +324,7 @@ function runRandomTest(request, timestamp) {
     const monkeyLocation = './random/cypress/integration/monkey_testing_ripper.spec.js';
     const screenShotsPath = `${WebAssets.SCREENSHOTS}/${request.environmentId}`;
     const videosPath = `${WebAssets.VIDEOS}/${request.environmentId}`;
-   
+
     const randomSeed = request.randomSeed || defaultRandomSeed;
     const maxEvents = request.maxEvents || defaultMaxEvents;
 
@@ -346,7 +357,7 @@ function runRandomTest(request, timestamp) {
             maxEvents: maxEvents
         };
     }
-    
+
     const cypressPromise = cypress.run({
         spec: monkeyLocation,
         project: projectLocation,
