@@ -5,6 +5,7 @@ const git = require('nodegit');
 const Launcher = require('webdriverio').Launcher;
 const compare = require('resemblejs').compare;
 const exec = require('child_process').execSync;
+const spawn = require('child_process').spawn;
 const sgMail = require('@sendgrid/mail');
 const downloadFileSync = require('download-file-sync');
 const path = require('path');
@@ -35,6 +36,7 @@ const WebPath = {
 
 const WebAssets = {
     SCREENSHOTS: './errorShots',
+    VIDEOS: './errorVideos',
     VRT: './vrtShots',
     REPORT: './report',
     MUTATION_REPORT: './reports/mutation/html'
@@ -137,7 +139,7 @@ function downloadGitRepository(request, timestamp) {
     }
 }
 
-function replaceTemplateTask(request, filePath) {
+function replaceTemplateTask(request, filePath, ext='js') {
     let data = fs.readFileSync(`${filePath}.template`, 'utf8');
 
     for (key in request) {
@@ -146,7 +148,7 @@ function replaceTemplateTask(request, filePath) {
         data = data.replace(regex, request[key]);
     }
 
-    fs.writeFileSync(`${filePath}.js`, data, 'utf8');
+    fs.writeFileSync(`${filePath}.${ext}`, data, 'utf8');
     console.log(' [x] Template generated sucessfully for path=%s', filePath);
 }
 
@@ -181,33 +183,46 @@ function runTests(request, timestamp) {
 }
 
 function downloadApk(request) {
-  var content = downloadFileSync(request.apkUrl);
   var packageParts = request.package.split('.');
   var fileName = packageParts[packageParts.length - 1] + '.apk';
   var apkDir = path.join(WebPath.APK_PATH, fileName);
-  fs.writeFileSync(apkDir, content);
+  var command = `curl "${request.apkUrl}" -o ${apkDir} -L -s`;
+  console.log(' [x] Downloading apk from %s', request.apkUrl);
+  exec(command);
+  console.log(' [x] Done downloading apk, saved @ %s', apkDir);
   return apkDir;
 }
 
 function runRandomTestAndroid(request, timestamp) {
   const apkDir = downloadApk(request);
+  try {
+      exec(`adb uninstall ${request.package}`);
+      console.log(' [x] Uninstalled apk %s', request.package);
+  } catch (e) {}
   exec(`adb install ${apkDir}`);
+  console.log('    [x] Will run video recording');
+  let videoRecording = spawn('adb', ['shell', 'screenrecord', '/sdcard/monkey.mp4']);
+  videoRecording.on('close', (code, signal) => {
+    console.log(`Video recording closed with code ${code} due to signal ${signal}`);
+  });
+
   exec(`adb shell monkey -p ${request.package} -v ${request.events}`);
-}
-
-function setUpAWS(request={accessKey: " ", accessSecret: " ", regionName: " "}) {
-  exec("aws configure", {input: `${request.accessKey}\n${request.accessSecret}\n${request.regionName}\njson\n`});
-}
-
-function runSymian(request) {
-  exec(".\\gradlew.bat jettyRun", {cwd: '.\\SimianArmy'});
+  //videoRecording.kill('SIGHUP');
+  console.log('  [x] Will try to kill video rec');
+  videoRecording.kill('SIGINT');
+  console.log('  [x] Done killing video');
+  var videoPath = path.join(WebAssets.VIDEOS, request.id);
+  if (!fs.existsSync(videoPath)) {
+      fs.mkdirSync(videoPath);
+  }
+  console.log('  [x] Will save at ' + videoPath);
+  exec(`adb pull /sdcard/monkey.mp4 ${path.join(videoPath, 'monkey.mp4')}`);
 }
 
 function runChaosTest(request, timestamp) {
   return new Promise((resolve, reject) => {
-    setUpAWS(request);
-    runSymian(request);
-    setUpAWS();
+    replaceTemplateTask(request, './SimianArmy/src/main/resources/client', 'properties');
+    exec(".\\gradlew jettyRun", {cwd: '.\\SimianArmy'});
   });
 }
 
