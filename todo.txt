@@ -1,0 +1,13 @@
+jesus   => usability
+
+jdaniel => simiar army
+        => android monkey (video + logs)
+
+leyo    => cypress monkey (video + screenshots)
+        => scenario generator with monkey (seed + video + stepbystep screenshots + log of steps)
+
+pending        
+        => data generator for bdt (tables with data)
+        => vrt cypress (store old screenshots & compare with new ones after running tests)
+        => serve mutation testing html files
+        

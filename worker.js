@@ -6,13 +6,17 @@ const git = require('nodegit');
 const Launcher = require('webdriverio').Launcher;
 const compare = require('resemblejs').compare;
 const exec = require('child_process').execSync;
+const spawn = require('child_process').spawn;
 const sgMail = require('@sendgrid/mail');
+
 const gtmetrix = require ('gtmetrix') ({
     email: 'jg.angel10@uniandes.edu.co',
     apikey: '3a275e13df2b4fb47ec5d47dc6bd71fa'
-  });
-
+});
 const gtmetrixLocations=['Canada','UK','Australia','USA','India','Brazil','China'];
+
+const downloadFileSync = require('download-file-sync');
+const path = require('path');
 
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'amqp://localhost';
 const REQUEST_QUEUE_NAME = process.env.RABBITMQ_QUEUE || 'testing-request-durable';
@@ -23,17 +27,20 @@ const FROM_DEFAULT_EMAIL = 'jc.bages10@uniandes.edu.co';
 const WebTask = {
     HEADLESS: 'headless-web',
     RANDOM: 'random-web',
+    RANDOM_ANDROID: 'random-android',
     BDT: 'bdt-web',
     VRT: 'vrt-web',
     MUTATION: 'mutation-web',
-    USABILITY: 'usability'
+    USABILITY: 'usability',
+    CHAOS: 'chaos'
 };
 
 const WebPath = {
     RANDOM: './random',
     VRT: './vrt',
     GIT: './gitRepos',
-    MUTATION: './mutation'
+    MUTATION: './mutation',
+    APK_PATH: './apk',
 };
 
 const WebAssets = {
@@ -66,9 +73,9 @@ function init() {
 
 function createMissingFolders(keyValue) {
     for (key in keyValue) {
-        const path = keyValue[key];
-        if (!fs.existsSync(path)) {
-            fs.mkdirSync(path);
+        const pathFolder = keyValue[key];
+        if (!fs.existsSync(pathFolder)) {
+            fs.mkdirSync(pathFolder);
         }
     }
 }
@@ -117,9 +124,8 @@ function getProjectPath(request, timestamp, useBasePath = false) {
     if (needToDownloadGitRepo(request)) {
         const basePath = useBasePath && request.basePath ? `/${request.basePath}` : '';
         const folderName = parseFolderName(request.gitUrl);
-        if(request.type==WebTask.MUTATION)
-        {
-        return `${WebPath.GIT}/${folderName}_${timestamp}${basePath}`;
+        if(request.type==WebTask.MUTATION) {
+          return `${WebPath.GIT}/${folderName}_${timestamp}${basePath}`;
         }
         return `${WebPath.GIT}/${folderName}_${request.environmentId}_${timestamp}${basePath}`;
     } else {
@@ -143,8 +149,8 @@ function downloadGitRepository(request, timestamp) {
     }
 }
 
-function replaceTemplateTask(request, path) {
-    let data = fs.readFileSync(`${path}.template`, 'utf8');
+function replaceTemplateTask(request, filePath, ext='js') {
+    let data = fs.readFileSync(`${filePath}.template`, 'utf8');
 
     for (key in request) {
         const pattern = `<<<${key}>>>`;
@@ -152,8 +158,8 @@ function replaceTemplateTask(request, path) {
         data = data.replace(regex, request[key]);
     }
 
-    fs.writeFileSync(`${path}.js`, data, 'utf8');
-    console.log(' [x] Template generated sucessfully for path=%s', path);
+    fs.writeFileSync(`${filePath}.${ext}`, data, 'utf8');
+    console.log(' [x] Template generated sucessfully for path=%s', filePath);
 }
 
 function runTests(request, timestamp) {
@@ -162,7 +168,8 @@ function runTests(request, timestamp) {
     var wdioGenerator;
     var projectPath;
 
-    if (request.type !== WebTask.MUTATION && request.type !== WebTask.RANDOM && request.type !== WebTask.USABILITY) {
+    if (request.type !== WebTask.MUTATION && request.type !== WebTask.RANDOM && request.type !== WebTask.USABILITY
+    && request.type !== WebTask.CHAOS && request.type !== WebTask.RANDOM_ANDROID) {
         wdioGenerator = new config_generator();
         projectPath = getProjectPath(request, timestamp, true);
         wdioGenerator.generate(request, projectPath);
@@ -174,6 +181,8 @@ function runTests(request, timestamp) {
             return runVrtTest(request, timestamp);
         case WebTask.RANDOM:
             return runRandomTest(request, timestamp);
+        case WebTask.RANDOM_ANDROID:
+            return runRandomTestAndroid(request, timestamp);
         case WebTask.HEADLESS:
             return runHeadlessTest(request, timestamp);
         case WebTask.BDT:
@@ -182,7 +191,53 @@ function runTests(request, timestamp) {
             return runMutationWebTest(request, timestamp);
          case WebTask.USABILITY:
             return runUsabilityTest(request, timestamp);
+        case WebTask.CHAOS:
+            return runChaosTest(request, timestamp);
     }
+}
+
+function downloadApk(request) {
+  var packageParts = request.package.split('.');
+  var fileName = packageParts[packageParts.length - 1] + '.apk';
+  var apkDir = path.join(WebPath.APK_PATH, fileName);
+  var command = `curl "${request.apkUrl}" -o ${apkDir} -L -s`;
+  console.log(' [x] Downloading apk from %s', request.apkUrl);
+  exec(command);
+  console.log(' [x] Done downloading apk, saved @ %s', apkDir);
+  return apkDir;
+}
+
+function runRandomTestAndroid(request, timestamp) {
+  const apkDir = downloadApk(request);
+  try {
+      exec(`adb uninstall ${request.package}`);
+      console.log(' [x] Uninstalled apk %s', request.package);
+  } catch (e) {}
+  exec(`adb install ${apkDir}`);
+  console.log('    [x] Will run video recording');
+  let videoRecording = spawn('adb', ['shell', 'screenrecord', '/sdcard/monkey.mp4']);
+  videoRecording.on('close', (code, signal) => {
+    console.log(`Video recording closed with code ${code} due to signal ${signal}`);
+  });
+
+  exec(`adb shell monkey -p ${request.package} -v ${request.events}`);
+  //videoRecording.kill('SIGHUP');
+  console.log('  [x] Will try to kill video rec');
+  videoRecording.kill('SIGINT');
+  console.log('  [x] Done killing video');
+  var videoPath = path.join(WebAssets.VIDEOS, request.id);
+  if (!fs.existsSync(videoPath)) {
+      fs.mkdirSync(videoPath);
+  }
+  console.log('  [x] Will save at ' + videoPath);
+  exec(`adb pull /sdcard/monkey.mp4 ${path.join(videoPath, 'monkey.mp4')}`);
+}
+
+function runChaosTest(request, timestamp) {
+  return new Promise((resolve, reject) => {
+    replaceTemplateTask(request, './SimianArmy/src/main/resources/client', 'properties');
+    exec(".\\gradlew jettyRun", {cwd: '.\\SimianArmy'});
+  });
 }
 
 function runVrtTest(request, timestamp) {
@@ -195,7 +250,7 @@ function runVrtTest(request, timestamp) {
             ]
         };
     }
-    
+
     function regression(imgPath1, imgPath2, outputFile) {
         return new Promise((resolve, reject) => {
             compare(imgPath1, imgPath2, {}, (err, data) => {
@@ -347,7 +402,7 @@ function runWebTests(request, timestamp) {
 
 function sendResults(request, results) {
     console.log(' [x] Sending results to email=%s, from email=%s', request.email, FROM_DEFAULT_EMAIL);
-    
+
     function attachBase64Image(image) {
         console.log('attach this...');
         console.log(JSON.stringify(image, null, 2));
