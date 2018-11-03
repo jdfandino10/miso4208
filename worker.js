@@ -471,10 +471,45 @@ function runUsabilityTest(request, timestamp) {
     }
 }
 
+function mockData(rows,path,dataLayout) {
+
+    var pass = JSON.parse(fs.readFileSync(`data/pass.txt`, 'utf8')).pass;
+    var email = JSON.parse(fs.readFileSync(`data/email.txt`, 'utf8')).email;
+
+    //console.log(pass);
+    //console.log(email);
+
+    var msg='';
+    for(var i=0;i<rows;i++)
+    {
+        msg+='\t\t\t|';
+        for (key in dataLayout) {
+            switch(dataLayout[key])
+            {
+                case "email":
+                    msg+=email[i];
+                case "pass":
+                    msg+=pass[i];
+                    default:
+                    msg+=dataLayout[key];
+            }
+            msg+='|';
+        }
+        msg+='\n';
+    }
+    console.log(msg);
+    console.log(path);
+    fs.appendFileSync(path, msg);
+}
+
 function runWebTests(request, timestamp) {
     const projectPath = getProjectPath(request, timestamp, true);
     const configFileName = `wdio.${request.environmentId}.conf.js`;
     console.log(' [x] Running a web test with wdio path=%s/%s', projectPath, configFileName);
+    if(request.type==WebTask.BDT && typeof request.pathToMock != "undefined")
+    {
+        mockData(request.mockSize,`${projectPath}/${request.pathToMock}`,request.dataMock)
+    }
     const wdio = new Launcher(`${projectPath}/${configFileName}`);
     return wdio.run();
 }
