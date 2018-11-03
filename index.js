@@ -18,7 +18,7 @@ app.post('/test', (req, res) => {
      *   baseId: <string>, // only for 'vrt'
      *   compareUrl: <string>, // only for 'vrt'
      *   gitUrl: <string>, // for  headless, randomweb, bdt
-     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt' | 'mutation-web'},
+     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt' | 'mutation-web' | 'chaos'},
      *   randomSeed: <number>,
      *   basePath: <string>,
      *   gremlinsTTL: <number>, // only for 'random-web'
@@ -32,6 +32,9 @@ app.post('/test', (req, res) => {
      *     },
      *     ...
      *   ],
+     *   accessKey: <string>,
+     *   accessSecret: <string>,
+     *   regionName: <string>,
      * }
      */
     var message = req.body;
@@ -66,6 +69,26 @@ app.post('/mutate', function(req, res) {
 
     res.json({ msg: 'Mutation is running. Check your email with the results as soon as they are ready' });
 });
+
+app.post('/chaos', function(req, res) {
+    /**
+     * {
+     *   email: <string>,
+     *   compareUrl: <string>,
+     *   gitUrl: <string>,
+     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt' | 'mutation-web'},
+     *   testPath: <string>,
+     *   mutatePath: <string>,
+     * }
+     */
+    var message = req.body;
+
+    message.id = uuidv4();
+    producer.sendMessage(message);
+
+    res.json({ msg: 'chaos is running. Check your email with the results as soon as they are ready' });
+});
+
 producer.init().then(() => {
     app.listen(3000);
 });

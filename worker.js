@@ -6,6 +6,8 @@ const Launcher = require('webdriverio').Launcher;
 const compare = require('resemblejs').compare;
 const exec = require('child_process').execSync;
 const sgMail = require('@sendgrid/mail');
+const downloadFileSync = require('download-file-sync');
+const path = require('path');
 
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'amqp://localhost';
 const REQUEST_QUEUE_NAME = process.env.RABBITMQ_QUEUE || 'testing-request-durable';
@@ -16,16 +18,19 @@ const FROM_DEFAULT_EMAIL = 'jc.bages10@uniandes.edu.co';
 const WebTask = {
     HEADLESS: 'headless-web',
     RANDOM: 'random-web',
+    RANDOM_ANDROID: 'random-android',
     BDT: 'bdt-web',
     VRT: 'vrt-web',
-    MUTATION: 'mutation-web'
+    MUTATION: 'mutation-web',
+    CHAOS: 'chaos'
 };
 
 const WebPath = {
     RANDOM: './random',
     VRT: './vrt',
     GIT: './gitRepos',
-    MUTATION: './mutation'
+    MUTATION: './mutation',
+    APK_PATH: './apk',
 };
 
 const WebAssets = {
@@ -56,9 +61,9 @@ function init() {
 
 function createMissingFolders(keyValue) {
     for (key in keyValue) {
-        const path = keyValue[key];
-        if (!fs.existsSync(path)) {
-            fs.mkdirSync(path);
+        const pathFolder = keyValue[key];
+        if (!fs.existsSync(pathFolder)) {
+            fs.mkdirSync(pathFolder);
         }
     }
 }
@@ -107,9 +112,8 @@ function getProjectPath(request, timestamp, useBasePath = false) {
     if (needToDownloadGitRepo(request)) {
         const basePath = useBasePath && request.basePath ? `/${request.basePath}` : '';
         const folderName = parseFolderName(request.gitUrl);
-        if(request.type==WebTask.MUTATION)
-        {
-        return `${WebPath.GIT}/${folderName}_${timestamp}${basePath}`;
+        if(request.type==WebTask.MUTATION) {
+          return `${WebPath.GIT}/${folderName}_${timestamp}${basePath}`;
         }
         return `${WebPath.GIT}/${folderName}_${request.environmentId}_${timestamp}${basePath}`;
     } else {
@@ -133,8 +137,8 @@ function downloadGitRepository(request, timestamp) {
     }
 }
 
-function replaceTemplateTask(request, path) {
-    let data = fs.readFileSync(`${path}.template`, 'utf8');
+function replaceTemplateTask(request, filePath) {
+    let data = fs.readFileSync(`${filePath}.template`, 'utf8');
 
     for (key in request) {
         const pattern = `<<<${key}>>>`;
@@ -142,8 +146,8 @@ function replaceTemplateTask(request, path) {
         data = data.replace(regex, request[key]);
     }
 
-    fs.writeFileSync(`${path}.js`, data, 'utf8');
-    console.log(' [x] Template generated sucessfully for path=%s', path);
+    fs.writeFileSync(`${filePath}.js`, data, 'utf8');
+    console.log(' [x] Template generated sucessfully for path=%s', filePath);
 }
 
 function runTests(request, timestamp) {
@@ -151,11 +155,10 @@ function runTests(request, timestamp) {
 
     var wdioGenerator;
     var projectPath;
-    if(request.type!=WebTask.MUTATION)
-    {
+    if(request.type!=WebTask.MUTATION && request.type != WebTask.CHAOS && request.type != WebTask.RANDOM_ANDROID) {
         wdioGenerator = new config_generator();
         projectPath= getProjectPath(request, timestamp, true);
-    wdioGenerator.generate(request, projectPath);
+        wdioGenerator.generate(request, projectPath);
         console.log('generated wdio.conf.js!');
     }
 
@@ -164,13 +167,48 @@ function runTests(request, timestamp) {
             return runVrtTest(request, timestamp);
         case WebTask.RANDOM:
             return runRandomTest(request, timestamp);
+        case WebTask.RANDOM_ANDROID:
+            return runRandomTestAndroid(request, timestamp);
         case WebTask.HEADLESS:
             return runHeadlessTest(request, timestamp);
         case WebTask.BDT:
             return runBdtTest(request, timestamp);
         case WebTask.MUTATION:
             return runMutationWebTest(request, timestamp);
+        case WebTask.CHAOS:
+            return runChaosTest(request, timestamp);
     }
+}
+
+function downloadApk(request) {
+  var content = downloadFileSync(request.apkUrl);
+  var packageParts = request.package.split('.');
+  var fileName = packageParts[packageParts.length - 1] + '.apk';
+  var apkDir = path.join(WebPath.APK_PATH, fileName);
+  fs.writeFileSync(apkDir, content);
+  return apkDir;
+}
+
+function runRandomTestAndroid(request, timestamp) {
+  const apkDir = downloadApk(request);
+  exec(`adb install ${apkDir}`);
+  exec(`adb shell monkey -p ${request.package} -v ${request.events}`);
+}
+
+function setUpAWS(request={accessKey: " ", accessSecret: " ", regionName: " "}) {
+  exec("aws configure", {input: `${request.accessKey}\n${request.accessSecret}\n${request.regionName}\njson\n`});
+}
+
+function runSymian(request) {
+  exec(".\\gradlew.bat jettyRun", {cwd: '.\\SimianArmy'});
+}
+
+function runChaosTest(request, timestamp) {
+  return new Promise((resolve, reject) => {
+    setUpAWS(request);
+    runSymian(request);
+    setUpAWS();
+  });
 }
 
 function runVrtTest(request, timestamp) {
@@ -183,7 +221,7 @@ function runVrtTest(request, timestamp) {
             ]
         };
     }
-    
+
     function regression(imgPath1, imgPath2, outputFile) {
         return new Promise((resolve, reject) => {
             compare(imgPath1, imgPath2, {}, (err, data) => {
@@ -263,7 +301,7 @@ function runWebTests(request, timestamp) {
 
 function sendResults(request, results) {
     console.log(' [x] Sending results to email=%s, from email=%s', request.email, FROM_DEFAULT_EMAIL);
-    
+
     function attachBase64Image(image) {
         const bitmap = fs.readFileSync(image.path);
         const base64Image = new Buffer(bitmap).toString('base64');
@@ -281,7 +319,7 @@ function sendResults(request, results) {
             {
                 const data = fs.readFileSync(`${WebAssets.REPORT}/.html`, 'utf-8');
                 return data.toString();
-            } 
+            }
         const data = fs.readFileSync(`${WebAssets.MUTATION_REPORT}/index.html`, 'utf-8');
         return data.toString();
     }

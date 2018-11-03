@@ -9,3 +9,4 @@ results/
 vrt/wdio.*.conf.js
 vrt/test/specs/vrt.js
 SimianArmy/
+apk/
