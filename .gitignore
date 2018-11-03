@@ -2,9 +2,11 @@ node_modules/
 uploadedFiles/
 errorShots/
 report/
+reports/
 vrtShots/
 gitRepos/
 results/
+mutation/*.js
 .DS_Store
 vrt/wdio.*.conf.js
 vrt/test/specs/vrt.js

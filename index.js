@@ -45,10 +45,10 @@ app.post('/test', (req, res) => {
         producer.sendMessage(message);
     });
 
-    res.json({ msg: 'Test are running. Check your email with the results as soon as they are ready.' });
+    res.json({ msg: 'Tests are running. Check your email with the results as soon as they are ready.' });
 });
 
-app.post('/mutate', function(req, res) {
+app.post('/other', function(req, res) {
     /**
      * {
      *   email: <string>,
@@ -64,7 +64,7 @@ app.post('/mutate', function(req, res) {
     message.id = uuidv4();
     producer.sendMessage(message);
 
-    res.json({ msg: 'Mutation is running. Check your email with the results as soon as they are ready' });
+    res.json({ msg: 'Test is running. Check your email with the results as soon as they are ready' });
 });
 producer.init().then(() => {
     app.listen(3000);

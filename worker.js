@@ -6,6 +6,12 @@ const Launcher = require('webdriverio').Launcher;
 const compare = require('resemblejs').compare;
 const exec = require('child_process').execSync;
 const sgMail = require('@sendgrid/mail');
+const gtmetrix = require ('gtmetrix') ({
+    email: 'jg.angel10@uniandes.edu.co',
+    apikey: '3a275e13df2b4fb47ec5d47dc6bd71fa'
+  });
+
+const gtmetrixLocations=['Canada','UK','Australia','USA','India','Brazil','China'];
 
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'amqp://localhost';
 const REQUEST_QUEUE_NAME = process.env.RABBITMQ_QUEUE || 'testing-request-durable';
@@ -18,7 +24,8 @@ const WebTask = {
     RANDOM: 'random-web',
     BDT: 'bdt-web',
     VRT: 'vrt-web',
-    MUTATION: 'mutation-web'
+    MUTATION: 'mutation-web',
+    USABILITY: 'usability'
 };
 
 const WebPath = {
@@ -151,7 +158,7 @@ function runTests(request, timestamp) {
 
     var wdioGenerator;
     var projectPath;
-    if(request.type!=WebTask.MUTATION)
+    if(request.type!=WebTask.MUTATION && request.type!=WebTask.USABILITY)
     {
         wdioGenerator = new config_generator();
         projectPath= getProjectPath(request, timestamp, true);
@@ -170,6 +177,8 @@ function runTests(request, timestamp) {
             return runBdtTest(request, timestamp);
         case WebTask.MUTATION:
             return runMutationWebTest(request, timestamp);
+         case WebTask.USABILITY:
+            return runUsabilityTest(request, timestamp);
     }
 }
 
@@ -253,6 +262,34 @@ exec("stryker run "+WebPath.MUTATION+"/stryker.conf.js");
 return { images: [] };
 }
 
+function runUsabilityTest(request, timestamp) {
+    console.log(' [x] Running usability test');
+    var testDetails = {
+        url: request.url,
+        location: gtmetrixLocations.indexOf(request.location)+1,
+        browser: request.browser=='Firefox'?1:3
+        };
+        return gtmetrix.test.create (testDetails).then (data =>
+            gtmetrix.test.get (data.test_id, 5000).then (processResponse))
+
+
+    function processCreateResponse(response) {
+        var response_object = JSON.parse(response);
+        var test_id = response.test_id;
+        var data = `Usability test done. Check your results at:\n${report_url}`;
+        fs.writeFileSync(`${WebAssets.REPORT}/index.html`, data, 'utf8');
+        console.log(response);
+    }
+
+    function processResponse(response) {
+        console.log(response)
+        var report_url = response.results.report_url;
+        var data = `<p>Usability test done. Check your results at:</p>\n<p><a href="${report_url}">${report_url}</a></p>`;
+        fs.writeFileSync(`${WebAssets.REPORT}/index.html`, data, 'utf8');
+        return { images: [] }
+    }
+}
+
 function runWebTests(request, timestamp) {
     const projectPath = getProjectPath(request, timestamp, true);
     const configFileName = `wdio.${request.environmentId}.conf.js`;
@@ -279,10 +316,10 @@ function sendResults(request, results) {
     function getHtmlString(task) {
         if(task==WebTask.MUTATION)
             {
-                const data = fs.readFileSync(`${WebAssets.REPORT}/.html`, 'utf-8');
+                const data = fs.readFileSync(`${WebAssets.MUTATION_REPORT}/.html`, 'utf-8');
                 return data.toString();
             } 
-        const data = fs.readFileSync(`${WebAssets.MUTATION_REPORT}/index.html`, 'utf-8');
+        const data = fs.readFileSync(`${WebAssets.REPORT}/index.html`, 'utf-8');
         return data.toString();
     }
 
