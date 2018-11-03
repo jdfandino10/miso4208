@@ -168,11 +168,16 @@ function runTests(request, timestamp) {
     var wdioGenerator;
     var projectPath;
 
-    if (request.type !== WebTask.MUTATION && request.type !== WebTask.RANDOM && request.type !== WebTask.USABILITY
-    && request.type !== WebTask.CHAOS && request.type !== WebTask.RANDOM_ANDROID) {
+    if (
+        request.type !== WebTask.MUTATION &&
+        request.type !== WebTask.RANDOM &&
+        request.type !== WebTask.USABILITY &&
+        request.type !== WebTask.CHAOS &&
+        request.type !== WebTask.RANDOM_ANDROID
+    ) {
         wdioGenerator = new config_generator();
         projectPath = getProjectPath(request, timestamp, true);
-        wdioGenerator.generate(request, projectPath);
+        wdioGenerator.generate(request, projectPath, WebAssets.REPORT, WebAssets.SCREENSHOTS);
         console.log('generated wdio.conf.js!');
     }
 
