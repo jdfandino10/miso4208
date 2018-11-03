@@ -45,6 +45,7 @@ const WebPath = {
 
 const WebAssets = {
     SCREENSHOTS: './errorShots',
+    SCENARIOS: './errorScenarios',
     VIDEOS: './errorVideos',
     MONKEY_FOLDER: 'monkey_testing_ripper.spec.js',
     VRT: './vrtShots',
@@ -329,9 +330,11 @@ function runRandomTest(request, timestamp) {
     const monkeyLocation = './random/cypress/integration/monkey_testing_ripper.spec.js';
     const screenShotsPath = `${WebAssets.SCREENSHOTS}/${request.environmentId}`;
     const videosPath = `${WebAssets.VIDEOS}/${request.environmentId}`;
+    const scenariosPath = `${WebAssets.SCENARIOS}/${request.environmentId}`;
 
     const randomSeed = request.randomSeed || defaultRandomSeed;
     const maxEvents = request.maxEvents || defaultMaxEvents;
+    const generateScenario = request.generateScenario || false;
 
     function getRandomResults(x) {
         // grab images
@@ -348,16 +351,29 @@ function runRandomTest(request, timestamp) {
         }
 
         // grab videos
-        const videosPath = `${WebAssets.VIDEOS}/${request.environmentId}`;
-        const videos = fs.readdirSync(videosPath).map(filePath => ({
-            path: `${videosPath}/${filePath}`,
-            filename: filePath,
-            type: 'video/mp4'
-        }));
+        let videos = [];
+        if (fs.existsSync(videosPath)) {
+            videos = fs.readdirSync(videosPath).map(filePath => ({
+                path: `${videosPath}/${filePath}`,
+                filename: filePath,
+                type: 'video/mp4'
+            }));
+        }
+
+        // grab report
+        let scenarios = [];
+        if (fs.existsSync(scenariosPath)) {
+            scenarios = fs.readdirSync(scenariosPath).map(filePath => ({
+                path: `${scenariosPath}/${filePath}`,
+                filename: filePath,
+                type: 'plain/text'
+            }));
+        }
 
         return {
             images: images,
             videos: videos,
+            scenarios: scenarios,
             randomSeed: randomSeed,
             maxEvents: maxEvents
         };
@@ -369,11 +385,14 @@ function runRandomTest(request, timestamp) {
         env: {
             baseUrl: request.url,
             randomSeed: randomSeed,
-            maxEvents: maxEvents
+            maxEvents: maxEvents,
+            generateScenario: generateScenario,
+            scenariosPath: `.${scenariosPath}`,
         },
         config: {
             baseUrl: request.url,
             screenshotsFolder: `.${screenShotsPath}`,
+            screenshotOnRunFailure: !generateScenario,
             videosFolder: `.${videosPath}`,
             trashAssetsBeforeRuns: false,
             viewportHeight: request.environment.viewport.height,
@@ -488,7 +507,8 @@ function sendResults(request, results) {
 
     const imagesAttachments = results.images.map(attachBase64);
     const videosAttachments = results.videos.map(attachBase64);
-    const attachments = imagesAttachments.concat(videosAttachments);
+    const scenariosPath = (results.scenarios || []).map(attachBase64);
+    const attachments = imagesAttachments.concat(videosAttachments).concat(scenariosPath);
 
     const mailObject = {
         to: request.email,

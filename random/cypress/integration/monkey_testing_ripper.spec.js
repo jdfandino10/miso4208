@@ -1,9 +1,18 @@
-var seedrandom = require('seedrandom');
+const seedrandom = require('seedrandom');
+const uuidv4 = require('uuid/v4');
 
 describe('Website under monkey testing', function() {
     it('visit the baseUrl website and survive monkeys', function() {
         cy.visit('');
         randomEvent();
+    })
+
+    it('clean all the state successfully', function () {
+        if (generateScenario) {
+            const filePath = `${scenariosPath}/scenarios.json`;
+            const jsonScenarios = JSON.stringify({ logs: scenarioLogs }, null, 4);
+            cy.writeFile(filePath, jsonScenarios);
+        }
     })
 })
 
@@ -21,7 +30,11 @@ const TEXT_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345
 let monkeysLeft = Cypress.env('maxEvents');
 const baseUrl = Cypress.env('baseUrl');
 const randomSeed = Cypress.env('randomSeed');
+const scenariosPath = Cypress.env('scenariosPath');
 seedrandom(randomSeed, { global: true });
+
+let scenarioLogs = [];
+const generateScenario = Cypress.env('generateScenario');
 
 function getRandomText() {
     let text = '';
@@ -44,12 +57,25 @@ function hasSameDomain(href) {
     }
 }
 
-function randomLink(monkeysLeft) {
+function randomLink() {
     return cy.get('a').then($items => {
         if ($items.length > 0) {
             const randomItem = $items.get(getRandomInt(0, $items.length));
             const href = randomItem.getAttribute('href');
             if (!Cypress.dom.isHidden(randomItem) && hasSameDomain(href)) {
+
+                if (generateScenario) {
+                    cy.screenshot();
+                    scenarioLogs.push({
+                        id: uuidv4(),
+                        eventType: 'randomLink',
+                        tag: 'a',
+                        tagId: randomItem.getAttribute('id'),
+                        tagClasses: randomItem.getAttribute('class'),
+                        href: href
+                    });
+                }
+
                 cy.wrap(randomItem).click({ force: true });
                 monkeysLeft--;
             }
@@ -57,23 +83,50 @@ function randomLink(monkeysLeft) {
     });
 }
 
-function randomTextInput(monkeysLeft) {
+function randomTextInput() {
     return cy.get('input').then($items => {
         if ($items.length > 0) {
             var randomItem = $items.get(getRandomInt(0, $items.length));
             if (!Cypress.dom.isHidden(randomItem)) {
-                cy.wrap(randomItem).type(getRandomText(), { force: true });
+                const randomText = getRandomText();
+
+                if (generateScenario) {
+                    cy.screenshot();
+                    scenarioLogs.push({
+                        id: uuidv4(),
+                        eventType: 'randomTextInput',
+                        tag: 'input',
+                        tagId: randomItem.getAttribute('id'),
+                        tagClasses: randomItem.getAttribute('class'),
+                        text: randomText
+                    });
+                }
+
+                cy.wrap(randomItem).type(randomText, { force: true });
                 monkeysLeft--;
             }
         }
     });
 }
 
-function randomButton(monkeysLeft) {
+function randomButton() {
     return cy.get('button').then($items => {
         if ($items.length > 0) {
             var randomItem = $items.get(getRandomInt(0, $items.length));
             if (!Cypress.dom.isHidden(randomItem)) {
+
+                if (generateScenario) {
+                    cy.screenshot();
+                    scenarioLogs.push({
+                        id: uuidv4(),
+                        eventType: 'randomButton',
+                        tag: 'button',
+                        tagId: randomItem.getAttribute('id'),
+                        tagClasses: randomItem.getAttribute('class'),
+                        text: randomText
+                    });
+                }
+
                 cy.wrap(randomItem).click({ force: true });
                 monkeysLeft--;
             }
@@ -90,11 +143,11 @@ function randomEvent(trials = 0) {
     var action = getRandomInt(1, 3);
     
     if (action === 1) {
-        randomLink(1);
+        randomLink();
     } else if (action === 2) {
-        randomButton(1);
+        randomButton();
     } else {
-        randomTextInput(1);
+        randomTextInput();
     }
 
     if (monkeysLeft !== prevMonkeysLeft) {
