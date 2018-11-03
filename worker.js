@@ -292,6 +292,16 @@ function runChaosTest(request, timestamp) {
 }
 
 function runVrtTest(request, timestamp) {
+    if (request.url && request.compareUrl) {
+        return runImageCompareVrtTest(request, timestamp);
+    } else {
+        return runIdCompareVrtTest(request, timestamp);
+    }
+}
+
+function runImageCompareVrtTest(request, timestamp) {
+    console.log(' [x] Running image compare VRT');
+
     function getVrtResults(imgPath1, imgPath2, outputFile) {
         return {
             images: [
@@ -320,6 +330,57 @@ function runVrtTest(request, timestamp) {
         const imgPath2 = `${WebAssets.VRT}/${request.environmentId}_snapshot_2.png`;
         const outputFile = `${WebAssets.VRT}/${request.environmentId}_output.png`;
         return regression(imgPath1, imgPath2, outputFile);
+    });
+}
+
+function runIdCompareVrtTest(request, timestamp) {
+    console.log(' [x] Running ID compare VRT id1=%s id2=%s', request.vrtId, request.compareVrtId);
+
+    const vrtIdPath1 = `${WebAssets.SCREENSHOTS}/${request.vrtId}`;
+    const vrtIdPath2 = `${WebAssets.SCREENSHOTS}/${request.compareVrtId}`;
+    const outputPath = `${WebAssets.SCREENSHOTS}/${request.environmentId}`;
+
+    function getVrtResults(imgPath1, imgPath2, outputFile) {
+        const imgName1 = path.basename(imgPath1);
+        const imgName2 = path.basename(imgPath2);
+        const outputName = path.basename(outputFile);
+
+        return {
+            images: [
+                { path: imgPath1, filename: imgName1, type: 'image/png' },
+                { path: imgPath2, filename: imgName2, type: 'image/png' },
+                { path: outputFile, filename: outputName, type: 'image/png' }
+            ]
+        };
+    }
+
+    function regression(imgPath1, imgPath2, outputFile) {
+        return new Promise((resolve, reject) => {
+            compare(imgPath1, imgPath2, {}, (err, data) => {
+                if (err) reject(err);
+                fs.writeFileSync(outputFile, data.getBuffer());
+                const results = getVrtResults(imgPath1, imgPath2, outputFile);
+                resolve(results);
+            });
+        });
+    }
+
+    const promises = fs.readdirSync(vrtIdPath1).map(imgPath => {
+        console.log(' [x] Regression to imgPath=%s', imgPath);
+
+        const lastPos = imgPath.lastIndexOf('.');
+        const imgName = imgPath.substring(0, lastPos);
+
+        const imgPath1 = `${vrtIdPath1}/${imgPath}`;
+        const imgPath2 = `${vrtIdPath2}/${imgPath}`;
+        const outputFile = `${outputPath}/${imgName}.vrt.png`;
+        return regression(imgPath1, imgPath2, outputFile);
+    });
+
+    return Promise.all(promises).then(allResults => {
+        const answerResults = { images: [], videos: [] };
+        allResults.forEach(result => answerResults.images = answerResults.images.concat(result.images));
+        return answerResults;
     });
 }
 
@@ -534,9 +595,27 @@ function sendResults(request, results) {
             const data = fs.readFileSync(`${WebAssets.MUTATION_REPORT}/index.html`, 'utf-8');
             return data.toString();
         } else if (task === WebTask.RANDOM || task === WebTask.RANDOM_ANDROID) {
-            return `<p>Check your attachments, randomSeed=${results.randomSeed}, maxEvents=${results.maxEvents} :)</p>`;
+            return `
+                <h1>Check your attachments</h1>
+                <ul>
+                    <li><strong>Environment Id:</strong> ${request.environmentId}</li>
+                    <li><strong>Random Seed:</strong> ${request.randomSeed}</li>
+                    <li><strong>Max Events:</strong> ${request.maxEvents}</li>
+                </ul>`;
+        } else if (task === WebTask.VRT && request.vrtId) {
+            return `
+                <h1>Check your attachments</h1>
+                <ul>
+                    <li><strong>Id #1:</strong> ${request.vrtId}</li>
+                    <li><strong>Id #2:</strong> ${request.compareVrtId}</li>
+                    <li><strong>Environment Id:</strong> ${request.environmentId}</li>
+                </ul>`;
         } else {
-            const data = fs.readFileSync(`${WebAssets.REPORT}/${request.environmentId}.html`, 'utf-8');
+            let data = fs.readFileSync(`${WebAssets.REPORT}/${request.environmentId}.html`, 'utf-8');
+            data += `
+                <ul>
+                    <li><strong>Environment Id:</strong> ${request.environmentId}</li>
+                </ul>`
             return data.toString();
         }
     }

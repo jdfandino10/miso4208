@@ -54,6 +54,7 @@ class Generator {
          */
         before: '__BEFORE__FUNC__',
         beforeTest: '__BEFORE_TEST_FUNC__',
+        afterTest: '__AFTER_TEST_FUNC__'
     };
     this.baseCopy = this.baseSpec;
   }
@@ -67,8 +68,17 @@ class Generator {
     }
     str = str.replace('"__BEFORE__FUNC__"', beforeFun);
 
-    let beforeTest = `function (test) { var title = test.title + '.png';console.log('###### HERE: Going to run ' + title + ' test');browser.saveScreenshot('${(this.screenshotPath || '.')}/' + title); }`;
+    let beforeTest = `function (test) {
+      var title = test.title + '.before.png';
+      browser.saveScreenshot('${this.screenshotPath}/' + title);
+    }`;
     str = str.replace('"__BEFORE_TEST_FUNC__"', beforeTest);
+
+    let afterTest = `function (test) {
+      var title = test.title + '.after.png';
+      browser.saveScreenshot('${this.screenshotPath}/' + title);
+    }`;
+    str = str.replace('"__AFTER_TEST_FUNC__"', afterTest);
 
     str = 'exports.config = ' + str;
     return str;
