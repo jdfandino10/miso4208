@@ -41,7 +41,7 @@ app.post('/test', (req, res) => {
 
     message.id = uuidv4();
 
-    const environments = message.environments;
+    const environments = message.environments || [{}];
     environments.forEach((environment) => {
         message.environmentId = uuidv4();
         message.environment = environment;

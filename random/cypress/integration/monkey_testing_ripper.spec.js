@@ -19,6 +19,7 @@ const MAX_TEXT_LENGTH = 100;
 const TEXT_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
 let monkeysLeft = Cypress.env('maxEvents');
+const baseUrl = Cypress.env('baseUrl');
 const randomSeed = Cypress.env('randomSeed');
 seedrandom(randomSeed, { global: true });
 
@@ -32,11 +33,23 @@ function getRandomText() {
     return text;
 }
 
+function hasSameDomain(href) {
+    var urlPattern = /^https?:\/\//i;
+    if (urlPattern.test(href)) {
+        const url1 = new URL(href);
+        const url2 = new URL(baseUrl);
+        return url1.hostname === url2.hostname;
+    } else {
+        return true;
+    }
+}
+
 function randomLink(monkeysLeft) {
     return cy.get('a').then($items => {
         if ($items.length > 0) {
-            var randomItem = $items.get(getRandomInt(0, $items.length));
-            if (!Cypress.dom.isHidden(randomItem)) {
+            const randomItem = $items.get(getRandomInt(0, $items.length));
+            const href = randomItem.getAttribute('href');
+            if (!Cypress.dom.isHidden(randomItem) && hasSameDomain(href)) {
                 cy.wrap(randomItem).click({ force: true });
                 monkeysLeft--;
             }

@@ -197,47 +197,81 @@ function runTests(request, timestamp) {
 }
 
 function downloadApk(request) {
-  var packageParts = request.package.split('.');
-  var fileName = packageParts[packageParts.length - 1] + '.apk';
-  var apkDir = path.join(WebPath.APK_PATH, fileName);
-  var command = `curl "${request.apkUrl}" -o ${apkDir} -L -s`;
-  console.log(' [x] Downloading apk from %s', request.apkUrl);
-  exec(command);
-  console.log(' [x] Done downloading apk, saved @ %s', apkDir);
-  return apkDir;
+    var packageParts = request.package.split('.');
+    var fileName = packageParts[packageParts.length - 1] + '.apk';
+    var apkDir = path.join(WebPath.APK_PATH, fileName);
+    var command = `curl "${request.apkUrl}" -o ${apkDir} -L -s`;
+    console.log(' [x] Downloading apk from %s', request.apkUrl);
+    exec(command);
+    console.log(' [x] Done downloading apk, saved @ %s', apkDir);
+    return apkDir;
 }
 
 function runRandomTestAndroid(request, timestamp) {
-  const apkDir = downloadApk(request);
-  try {
-      exec(`adb uninstall ${request.package}`);
-      console.log(' [x] Uninstalled apk %s', request.package);
-  } catch (e) {}
-  exec(`adb install ${apkDir}`);
-  console.log('    [x] Will run video recording');
-  let videoRecording = spawn('adb', ['shell', 'screenrecord', '/sdcard/monkey.mp4']);
-  videoRecording.on('close', (code, signal) => {
-    console.log(`Video recording closed with code ${code} due to signal ${signal}`);
-  });
+    const defaultRandomSeed = (new Date()).getTime();
+    const defaultMaxEvents = 50;
 
-  exec(`adb shell monkey -p ${request.package} -v ${request.events}`);
-  //videoRecording.kill('SIGHUP');
-  console.log('  [x] Will try to kill video rec');
-  videoRecording.kill('SIGINT');
-  console.log('  [x] Done killing video');
-  var videoPath = path.join(WebAssets.VIDEOS, request.id);
-  if (!fs.existsSync(videoPath)) {
-      fs.mkdirSync(videoPath);
-  }
-  console.log('  [x] Will save at ' + videoPath);
-  exec(`adb pull /sdcard/monkey.mp4 ${path.join(videoPath, 'monkey.mp4')}`);
+    const videosPath = `${WebAssets.VIDEOS}/${request.environmentId}`;
+    const maxEvents = request.maxEvents || defaultMaxEvents;
+    const randomSeed =  request.randomSeed || defaultRandomSeed;
+
+    function getAndroidRandomResults(x) {
+        const videos = fs.readdirSync(videosPath).map(filePath => ({
+            path: `${videosPath}/${filePath}`,
+            filename: filePath,
+            type: 'video/mp4'
+        }));
+
+        return {
+            images: [],
+            videos: videos,
+            randomSeed: randomSeed,
+            maxEvents: maxEvents
+        };
+    }
+    
+    const promise = new Promise((resolve, _) => {
+        const apkDir = downloadApk(request);
+        try {
+            exec(`adb uninstall ${request.package}`);
+            console.log(' [x] Uninstalled apk %s', request.package);
+        } catch (e) {
+            console.log(' [x] App not installed on device, continue...');
+        }
+
+        console.log(' [x] Installing apk with package %s...', request.package);
+        exec(`adb install ${apkDir}`);
+
+        console.log(' [x] Starting video recording...');
+        let videoRecording = spawn('adb', ['shell', 'screenrecord', '/sdcard/monkey.mp4']);
+        videoRecording.on('close', (code, signal) => {
+            console.log(' [x] Done killing video code=%s, signal=%s', code, signal);
+            performVideoPostProcessing();
+        });
+
+        console.log(' [x] Starting monkey testing with %s events and %d seed', maxEvents, randomSeed);
+        exec(`adb shell monkey -p ${request.package} -v ${maxEvents} -s ${randomSeed}`);
+        console.log(' [x] Trying to kill video recording...');
+        videoRecording.kill('SIGINT');
+
+        function performVideoPostProcessing() {
+            if (!fs.existsSync(videosPath)) {
+                fs.mkdirSync(videosPath);
+            }
+            console.log(` [x] Saving video at ${videosPath}`);
+            exec(`adb pull /sdcard/monkey.mp4 ${path.join(videosPath, 'monkey.mp4')}`);
+            resolve();
+        }
+    });
+
+    return promise.then(getAndroidRandomResults);
 }
 
 function runChaosTest(request, timestamp) {
-  return new Promise((resolve, reject) => {
-    replaceTemplateTask(request, './SimianArmy/src/main/resources/client', 'properties');
-    exec(".\\gradlew jettyRun", {cwd: '.\\SimianArmy'});
-  });
+    return new Promise((resolve, reject) => {
+        replaceTemplateTask(request, './SimianArmy/src/main/resources/client', 'properties');
+        exec(".\\gradlew jettyRun", {cwd: '.\\SimianArmy'});
+    });
 }
 
 function runVrtTest(request, timestamp) {
@@ -274,15 +308,28 @@ function runVrtTest(request, timestamp) {
 function runRandomTest(request, timestamp) {
     const defaultRandomSeed = (new Date()).getTime();
     const defaultMaxEvents = 50;
-    
+
+    const projectLocation = './random';
+    const monkeyLocation = './random/cypress/integration/monkey_testing_ripper.spec.js';
+    const screenShotsPath = `${WebAssets.SCREENSHOTS}/${request.environmentId}`;
+    const videosPath = `${WebAssets.VIDEOS}/${request.environmentId}`;
+   
+    const randomSeed = request.randomSeed || defaultRandomSeed;
+    const maxEvents = request.maxEvents || defaultMaxEvents;
+
     function getRandomResults(x) {
         // grab images
-        const screenShotsPath = `${WebAssets.SCREENSHOTS}/${request.environmentId}/${WebAssets.MONKEY_FOLDER}`;        
-        const images = fs.readdirSync(screenShotsPath).map(imagePath => ({
-            path: `${screenShotsPath}/${imagePath}`,
-            filename: imagePath,
-            type: 'image/png'
-        }));
+        let images = [];
+        if (fs.existsSync(screenShotsPath)) {
+            const innerPath = `${screenShotsPath}/${WebAssets.MONKEY_FOLDER}`;
+            if (fs.existsSync(innerPath)) {
+                images = fs.readdirSync(innerPath).map(imagePath => ({
+                    path: `${innerPath}/${imagePath}`,
+                    filename: imagePath,
+                    type: 'image/png'
+                }));
+            }
+        }
 
         // grab videos
         const videosPath = `${WebAssets.VIDEOS}/${request.environmentId}`;
@@ -295,27 +342,23 @@ function runRandomTest(request, timestamp) {
         return {
             images: images,
             videos: videos,
-            randomSeed: request.randomSeed || defaultRandomSeed,
-            maxEvents: request.maxEvents || defaultMaxEvents
+            randomSeed: randomSeed,
+            maxEvents: maxEvents
         };
     }
-
-    const projectLocation = './random';
-    const monkeyLocation = './random/cypress/integration/monkey_testing_ripper.spec.js';
-    const screenShotsPath = `../${WebAssets.SCREENSHOTS}/${request.environmentId}`;
-    const videosPath = `../${WebAssets.VIDEOS}/${request.environmentId}`;
     
     const cypressPromise = cypress.run({
         spec: monkeyLocation,
         project: projectLocation,
         env: {
-            randomSeed: request.randomSeed || defaultRandomSeed, // Defaults to now as seed
-            maxEvents: request.maxEvents || defaultMaxEvents     // Defaults to 50 events
+            baseUrl: request.url,
+            randomSeed: randomSeed,
+            maxEvents: maxEvents
         },
         config: {
             baseUrl: request.url,
-            screenshotsFolder: screenShotsPath,
-            videosFolder: videosPath,
+            screenshotsFolder: `.${screenShotsPath}`,
+            videosFolder: `.${videosPath}`,
             trashAssetsBeforeRuns: false,
             viewportHeight: request.environment.viewport.height,
             viewportWidth: request.environment.viewport.width
@@ -403,10 +446,7 @@ function runWebTests(request, timestamp) {
 function sendResults(request, results) {
     console.log(' [x] Sending results to email=%s, from email=%s', request.email, FROM_DEFAULT_EMAIL);
 
-    function attachBase64Image(image) {
-        console.log('attach this...');
-        console.log(JSON.stringify(image, null, 2));
-
+    function attachBase64(image) {
         const bitmap = fs.readFileSync(image.path);
         const base64Image = new Buffer(bitmap).toString('base64');
         return {
@@ -422,7 +462,7 @@ function sendResults(request, results) {
         if (task === WebTask.MUTATION) {
             const data = fs.readFileSync(`${WebAssets.MUTATION_REPORT}/index.html`, 'utf-8');
             return data.toString();
-        } else if (task === WebTask.RANDOM) {
+        } else if (task === WebTask.RANDOM || task === WebTask.RANDOM_ANDROID) {
             return `<p>Check your attachments, randomSeed=${results.randomSeed}, maxEvents=${results.maxEvents} :)</p>`;
         } else {
             const data = fs.readFileSync(`${WebAssets.REPORT}/${request.environmentId}.html`, 'utf-8');
@@ -430,8 +470,8 @@ function sendResults(request, results) {
         }
     }
 
-    const imagesAttachments = results.images.map(attachBase64Image);
-    const videosAttachments = results.videos.map(attachBase64Image);
+    const imagesAttachments = results.images.map(attachBase64);
+    const videosAttachments = results.videos.map(attachBase64);
     const attachments = imagesAttachments.concat(videosAttachments);
 
     const mailObject = {
