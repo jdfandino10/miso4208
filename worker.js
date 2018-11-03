@@ -1,5 +1,6 @@
 const amqp = require('amqplib/callback_api');
 const config_generator = require('./wdio_generator/generator');
+const cypress = require('cypress');
 const fs = require('fs');
 const git = require('nodegit');
 const Launcher = require('webdriverio').Launcher;
@@ -37,6 +38,8 @@ const WebPath = {
 
 const WebAssets = {
     SCREENSHOTS: './errorShots',
+    VIDEOS: './errorVideos',
+    MONKEY_FOLDER: 'monkey_testing_ripper.spec.js',
     VRT: './vrtShots',
     REPORT: './report',
     MUTATION_REPORT: './mutationReport'
@@ -158,11 +161,11 @@ function runTests(request, timestamp) {
 
     var wdioGenerator;
     var projectPath;
-    if(request.type!=WebTask.MUTATION && request.type!=WebTask.USABILITY)
-    {
+
+    if (request.type !== WebTask.MUTATION && request.type !== WebTask.RANDOM && request.type !== WebTask.USABILITY) {
         wdioGenerator = new config_generator();
-        projectPath= getProjectPath(request, timestamp, true);
-    wdioGenerator.generate(request, projectPath);
+        projectPath = getProjectPath(request, timestamp, true);
+        wdioGenerator.generate(request, projectPath);
         console.log('generated wdio.conf.js!');
     }
 
@@ -214,12 +217,56 @@ function runVrtTest(request, timestamp) {
 }
 
 function runRandomTest(request, timestamp) {
-    function getRandomResults() {
-        return { images: [] };
+    const defaultRandomSeed = (new Date()).getTime();
+    const defaultMaxEvents = 50;
+    
+    function getRandomResults(x) {
+        // grab images
+        const screenShotsPath = `${WebAssets.SCREENSHOTS}/${request.environmentId}/${WebAssets.MONKEY_FOLDER}`;        
+        const images = fs.readdirSync(screenShotsPath).map(imagePath => ({
+            path: `${screenShotsPath}/${imagePath}`,
+            filename: imagePath,
+            type: 'image/png'
+        }));
+
+        // grab videos
+        const videosPath = `${WebAssets.VIDEOS}/${request.environmentId}`;
+        const videos = fs.readdirSync(videosPath).map(filePath => ({
+            path: `${videosPath}/${filePath}`,
+            filename: filePath,
+            type: 'video/mp4'
+        }));
+
+        return {
+            images: images,
+            videos: videos,
+            randomSeed: request.randomSeed || defaultRandomSeed,
+            maxEvents: request.maxEvents || defaultMaxEvents
+        };
     }
 
-    replaceTemplateTask(request, `${WebPath.RANDOM}/test/specs/gremlins`);
-    return runWebTests(request, timestamp).then(getRandomResults);
+    const projectLocation = './random';
+    const monkeyLocation = './random/cypress/integration/monkey_testing_ripper.spec.js';
+    const screenShotsPath = `../${WebAssets.SCREENSHOTS}/${request.environmentId}`;
+    const videosPath = `../${WebAssets.VIDEOS}/${request.environmentId}`;
+    
+    const cypressPromise = cypress.run({
+        spec: monkeyLocation,
+        project: projectLocation,
+        env: {
+            randomSeed: request.randomSeed || defaultRandomSeed, // Defaults to now as seed
+            maxEvents: request.maxEvents || defaultMaxEvents     // Defaults to 50 events
+        },
+        config: {
+            baseUrl: request.url,
+            screenshotsFolder: screenShotsPath,
+            videosFolder: videosPath,
+            trashAssetsBeforeRuns: false,
+            viewportHeight: request.environment.viewport.height,
+            viewportWidth: request.environment.viewport.width
+        }
+    });
+    return cypressPromise.then(getRandomResults);
 }
 
 function runHeadlessTest(request, timestamp) {
@@ -230,7 +277,7 @@ function runHeadlessTest(request, timestamp) {
             filename: imagePath,
             type: 'image/png'
         }));
-        return { images: images };
+        return { images: images, videos: [] };
     }
 
     return runWebTests(request, timestamp).then(getHeadlessResults);
@@ -238,7 +285,7 @@ function runHeadlessTest(request, timestamp) {
 
 function runBdtTest(request, timestamp) {
     function getBdtResults() {
-        return { images: [] };
+        return { images: [], videos: [] };
     }
 
     return runWebTests(request, timestamp).then(getBdtResults);
@@ -259,7 +306,7 @@ function runMutationWebTest(request, timestamp) {
     //fs.renameSync(WebPath.MUTATION + "/karma.conf.js",projectPath+ "/karma.conf.js");
     //fs.renameSync(WebPath.MUTATION + "/stryker.conf.js",projectPath+ "/stryker.conf.js");
     exec('stryker run ' + WebPath.MUTATION + '/stryker.conf.js');
-    return { images: [] };
+    return { images: [], videos: [] };
 }
 
 function runUsabilityTest(request, timestamp) {
@@ -302,6 +349,9 @@ function sendResults(request, results) {
     console.log(' [x] Sending results to email=%s, from email=%s', request.email, FROM_DEFAULT_EMAIL);
     
     function attachBase64Image(image) {
+        console.log('attach this...');
+        console.log(JSON.stringify(image, null, 2));
+
         const bitmap = fs.readFileSync(image.path);
         const base64Image = new Buffer(bitmap).toString('base64');
         return {
@@ -314,21 +364,27 @@ function sendResults(request, results) {
     }
 
     function getHtmlString(task) {
-        if(task==WebTask.MUTATION)
-            {
-                const data = fs.readFileSync(`${WebAssets.MUTATION_REPORT}/.html`, 'utf-8');
-                return data.toString();
-            } 
-        const data = fs.readFileSync(`${WebAssets.REPORT}/index.html`, 'utf-8');
-        return data.toString();
+        if (task === WebTask.MUTATION) {
+            const data = fs.readFileSync(`${WebAssets.MUTATION_REPORT}/index.html`, 'utf-8');
+            return data.toString();
+        } else if (task === WebTask.RANDOM) {
+            return `<p>Check your attachments, randomSeed=${results.randomSeed}, maxEvents=${results.maxEvents} :)</p>`;
+        } else {
+            const data = fs.readFileSync(`${WebAssets.REPORT}/${request.environmentId}.html`, 'utf-8');
+            return data.toString();
+        }
     }
+
+    const imagesAttachments = results.images.map(attachBase64Image);
+    const videosAttachments = results.videos.map(attachBase64Image);
+    const attachments = imagesAttachments.concat(videosAttachments);
 
     const mailObject = {
         to: request.email,
         from: FROM_DEFAULT_EMAIL,
         subject: 'Top Testing Tool Test results',
-        html: getHtmlString(request.WebTask),
-        attachments: results.images.map(attachBase64Image)
+        html: getHtmlString(request.type),
+        attachments: attachments
     };
 
     console.log(' [x] Sendgrid mail object=%s', JSON.stringify(mailObject, null, 2));
