@@ -488,10 +488,13 @@ function mockData(rows,path,dataLayout) {
             {
                 case "email":
                     msg+=email[i];
+                    break;
                 case "pass":
                     msg+=pass[i];
-                    default:
+                    break;
+                default:
                     msg+=dataLayout[key];
+                    break;
             }
             msg+='|';
         }
