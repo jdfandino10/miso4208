@@ -67,7 +67,7 @@ class Generator {
     }
     str = str.replace('"__BEFORE__FUNC__"', beforeFun);
 
-    let beforeTest = `function (test) { var title = test.title + '.png';browser.saveScreenshot('${(this.screenshotPath || '.')}/' + title); }`;
+    let beforeTest = `function (test) { var title = test.title + '.png';console.log('###### HERE: Going to run ' + title + ' test');browser.saveScreenshot('${(this.screenshotPath || '.')}/' + title); }`;
     str = str.replace('"__BEFORE_TEST_FUNC__"', beforeTest);
 
     str = 'exports.config = ' + str;

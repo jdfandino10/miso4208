@@ -297,7 +297,8 @@ function runVrtTest(request, timestamp) {
                 { path: imgPath1, filename: 'url.png', type: 'image/png' },
                 { path: imgPath2, filename: 'compareUrl.png', type: 'image/png' },
                 { path: outputFile, filename: 'results.png', type: 'image/png' }
-            ]
+            ],
+            videos: []
         };
     }
 
