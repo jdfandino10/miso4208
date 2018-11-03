@@ -1,17 +1,22 @@
 const amqp = require('amqplib/callback_api');
 const config_generator = require('./wdio_generator/generator');
+const cypress = require('cypress');
 const fs = require('fs');
 const git = require('nodegit');
 const Launcher = require('webdriverio').Launcher;
 const compare = require('resemblejs').compare;
 const exec = require('child_process').execSync;
+const spawn = require('child_process').spawn;
 const sgMail = require('@sendgrid/mail');
+
 const gtmetrix = require ('gtmetrix') ({
     email: 'jg.angel10@uniandes.edu.co',
     apikey: '3a275e13df2b4fb47ec5d47dc6bd71fa'
-  });
-
+});
 const gtmetrixLocations=['Canada','UK','Australia','USA','India','Brazil','China'];
+
+const downloadFileSync = require('download-file-sync');
+const path = require('path');
 
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'amqp://localhost';
 const REQUEST_QUEUE_NAME = process.env.RABBITMQ_QUEUE || 'testing-request-durable';
@@ -22,24 +27,29 @@ const FROM_DEFAULT_EMAIL = 'jc.bages10@uniandes.edu.co';
 const WebTask = {
     HEADLESS: 'headless-web',
     RANDOM: 'random-web',
+    RANDOM_ANDROID: 'random-android',
     BDT: 'bdt-web',
     VRT: 'vrt-web',
     MUTATION: 'mutation-web',
-    USABILITY: 'usability'
+    USABILITY: 'usability',
+    CHAOS: 'chaos'
 };
 
 const WebPath = {
     RANDOM: './random',
     VRT: './vrt',
     GIT: './gitRepos',
-    MUTATION: './mutation'
+    MUTATION: './mutation',
+    APK_PATH: './apk',
 };
 
 const WebAssets = {
     SCREENSHOTS: './errorShots',
+    VIDEOS: './errorVideos',
+    MONKEY_FOLDER: 'monkey_testing_ripper.spec.js',
     VRT: './vrtShots',
     REPORT: './report',
-    MUTATION_REPORT: './reports/mutation/html'
+    MUTATION_REPORT: './mutationReport'
 };
 
 function init() {
@@ -63,9 +73,9 @@ function init() {
 
 function createMissingFolders(keyValue) {
     for (key in keyValue) {
-        const path = keyValue[key];
-        if (!fs.existsSync(path)) {
-            fs.mkdirSync(path);
+        const pathFolder = keyValue[key];
+        if (!fs.existsSync(pathFolder)) {
+            fs.mkdirSync(pathFolder);
         }
     }
 }
@@ -114,9 +124,8 @@ function getProjectPath(request, timestamp, useBasePath = false) {
     if (needToDownloadGitRepo(request)) {
         const basePath = useBasePath && request.basePath ? `/${request.basePath}` : '';
         const folderName = parseFolderName(request.gitUrl);
-        if(request.type==WebTask.MUTATION)
-        {
-        return `${WebPath.GIT}/${folderName}_${timestamp}${basePath}`;
+        if(request.type==WebTask.MUTATION) {
+          return `${WebPath.GIT}/${folderName}_${timestamp}${basePath}`;
         }
         return `${WebPath.GIT}/${folderName}_${request.environmentId}_${timestamp}${basePath}`;
     } else {
@@ -140,8 +149,8 @@ function downloadGitRepository(request, timestamp) {
     }
 }
 
-function replaceTemplateTask(request, path) {
-    let data = fs.readFileSync(`${path}.template`, 'utf8');
+function replaceTemplateTask(request, filePath, ext='js') {
+    let data = fs.readFileSync(`${filePath}.template`, 'utf8');
 
     for (key in request) {
         const pattern = `<<<${key}>>>`;
@@ -149,8 +158,8 @@ function replaceTemplateTask(request, path) {
         data = data.replace(regex, request[key]);
     }
 
-    fs.writeFileSync(`${path}.js`, data, 'utf8');
-    console.log(' [x] Template generated sucessfully for path=%s', path);
+    fs.writeFileSync(`${filePath}.${ext}`, data, 'utf8');
+    console.log(' [x] Template generated sucessfully for path=%s', filePath);
 }
 
 function runTests(request, timestamp) {
@@ -158,11 +167,17 @@ function runTests(request, timestamp) {
 
     var wdioGenerator;
     var projectPath;
-    if(request.type!=WebTask.MUTATION && request.type!=WebTask.USABILITY)
-    {
+
+    if (
+        request.type !== WebTask.MUTATION &&
+        request.type !== WebTask.RANDOM &&
+        request.type !== WebTask.USABILITY &&
+        request.type !== WebTask.CHAOS &&
+        request.type !== WebTask.RANDOM_ANDROID
+    ) {
         wdioGenerator = new config_generator();
-        projectPath= getProjectPath(request, timestamp, true);
-    wdioGenerator.generate(request, projectPath);
+        projectPath = getProjectPath(request, timestamp, true);
+        wdioGenerator.generate(request, projectPath, WebAssets.REPORT, WebAssets.SCREENSHOTS);
         console.log('generated wdio.conf.js!');
     }
 
@@ -171,6 +186,8 @@ function runTests(request, timestamp) {
             return runVrtTest(request, timestamp);
         case WebTask.RANDOM:
             return runRandomTest(request, timestamp);
+        case WebTask.RANDOM_ANDROID:
+            return runRandomTestAndroid(request, timestamp);
         case WebTask.HEADLESS:
             return runHeadlessTest(request, timestamp);
         case WebTask.BDT:
@@ -179,7 +196,98 @@ function runTests(request, timestamp) {
             return runMutationWebTest(request, timestamp);
          case WebTask.USABILITY:
             return runUsabilityTest(request, timestamp);
+        case WebTask.CHAOS:
+            return runChaosTest(request, timestamp);
     }
+}
+
+function downloadApk(request) {
+    var packageParts = request.package.split('.');
+    var fileName = packageParts[packageParts.length - 1] + '.apk';
+    var apkDir = path.join(WebPath.APK_PATH, fileName);
+    var command = `curl "${request.apkUrl}" -o ${apkDir} -L -s`;
+    console.log(' [x] Downloading apk from %s', request.apkUrl);
+    exec(command);
+    console.log(' [x] Done downloading apk, saved @ %s', apkDir);
+    return apkDir;
+}
+
+function runRandomTestAndroid(request, timestamp) {
+    const defaultRandomSeed = (new Date()).getTime();
+    const defaultMaxEvents = 50;
+
+    const videosPath = `${WebAssets.VIDEOS}/${request.environmentId}`;
+    const maxEvents = request.maxEvents || defaultMaxEvents;
+    const randomSeed =  request.randomSeed || defaultRandomSeed;
+
+    function getAndroidRandomResults(x) {
+        const videos = fs.readdirSync(videosPath).map(filePath => ({
+            path: `${videosPath}/${filePath}`,
+            filename: filePath,
+            type: 'video/mp4'
+        }));
+
+        return {
+            images: [],
+            videos: videos,
+            randomSeed: randomSeed,
+            maxEvents: maxEvents
+        };
+    }
+
+    const promise = new Promise((resolve, _) => {
+        const apkDir = downloadApk(request);
+        try {
+            console.log(' [x] Trying to uninstall apk %s', request.package);
+            exec(`adb uninstall ${request.package}`);
+            console.log(' [x] Uninstalled apk %s', request.package);
+        } catch (e) {
+            console.log(' [x] App not installed on device, continue...');
+        }
+
+        console.log(' [x] Installing apk with package %s...', request.package);
+        exec(`adb install ${apkDir}`);
+
+        console.log(' [x] Starting video recording...');
+        let videoRecording = spawn('adb', ['shell', 'screenrecord', '/sdcard/monkey.mp4']);
+        videoRecording.on('close', (code, signal) => {
+            console.log(' [x] Done killing video code=%s, signal=%s', code, signal);
+            performVideoPostProcessing();
+        });
+
+        console.log(' [x] Starting monkey testing with %s events and %d seed', maxEvents, randomSeed);
+        exec(`adb shell monkey -p ${request.package} -v ${maxEvents} -s ${randomSeed}`);
+        console.log(' [x] Trying to kill video recording...');
+        videoRecording.kill('SIGINT');
+
+        function performVideoPostProcessing() {
+            if (!fs.existsSync(videosPath)) {
+                fs.mkdirSync(videosPath);
+            }
+            console.log(` [x] Waiting 2 seconds for video to be ready...`);
+            setTimeout(() => {
+              console.log(` [x] Saving video at ${videosPath}`);
+              exec(`adb pull /sdcard/monkey.mp4 ${path.join(videosPath, 'monkey.mp4')}`);
+              resolve();
+            }, 2000);
+        }
+    });
+
+    return promise.then(getAndroidRandomResults);
+}
+
+
+function runChaosTest(request, timestamp) {
+    return new Promise((resolve, reject) => {
+        replaceTemplateTask(request, './SimianArmy/src/main/resources/client', 'properties');
+        replaceTemplateTask(request, './SimianArmy/src/main/resources/chaos', 'properties');
+        replaceTemplateTask(request, './SimianArmy/src/main/resources/conformity', 'properties');
+        replaceTemplateTask(request, './SimianArmy/src/main/resources/janitor', 'properties');
+        replaceTemplateTask(request, './SimianArmy/src/main/resources/simianarmy', 'properties');
+        console.log(` [x] Starting simian army`);
+        exec(".\\gradlew jettyRun", {cwd: '.\\SimianArmy'});
+        console.log(` [x] Done with simian army`);
+    });
 }
 
 function runVrtTest(request, timestamp) {
@@ -192,7 +300,7 @@ function runVrtTest(request, timestamp) {
             ]
         };
     }
-    
+
     function regression(imgPath1, imgPath2, outputFile) {
         return new Promise((resolve, reject) => {
             compare(imgPath1, imgPath2, {}, (err, data) => {
@@ -214,12 +322,65 @@ function runVrtTest(request, timestamp) {
 }
 
 function runRandomTest(request, timestamp) {
-    function getRandomResults() {
-        return { images: [] };
+    const defaultRandomSeed = (new Date()).getTime();
+    const defaultMaxEvents = 50;
+
+    const projectLocation = './random';
+    const monkeyLocation = './random/cypress/integration/monkey_testing_ripper.spec.js';
+    const screenShotsPath = `${WebAssets.SCREENSHOTS}/${request.environmentId}`;
+    const videosPath = `${WebAssets.VIDEOS}/${request.environmentId}`;
+
+    const randomSeed = request.randomSeed || defaultRandomSeed;
+    const maxEvents = request.maxEvents || defaultMaxEvents;
+
+    function getRandomResults(x) {
+        // grab images
+        let images = [];
+        if (fs.existsSync(screenShotsPath)) {
+            const innerPath = `${screenShotsPath}/${WebAssets.MONKEY_FOLDER}`;
+            if (fs.existsSync(innerPath)) {
+                images = fs.readdirSync(innerPath).map(imagePath => ({
+                    path: `${innerPath}/${imagePath}`,
+                    filename: imagePath,
+                    type: 'image/png'
+                }));
+            }
+        }
+
+        // grab videos
+        const videosPath = `${WebAssets.VIDEOS}/${request.environmentId}`;
+        const videos = fs.readdirSync(videosPath).map(filePath => ({
+            path: `${videosPath}/${filePath}`,
+            filename: filePath,
+            type: 'video/mp4'
+        }));
+
+        return {
+            images: images,
+            videos: videos,
+            randomSeed: randomSeed,
+            maxEvents: maxEvents
+        };
     }
 
-    replaceTemplateTask(request, `${WebPath.RANDOM}/test/specs/gremlins`);
-    return runWebTests(request, timestamp).then(getRandomResults);
+    const cypressPromise = cypress.run({
+        spec: monkeyLocation,
+        project: projectLocation,
+        env: {
+            baseUrl: request.url,
+            randomSeed: randomSeed,
+            maxEvents: maxEvents
+        },
+        config: {
+            baseUrl: request.url,
+            screenshotsFolder: `.${screenShotsPath}`,
+            videosFolder: `.${videosPath}`,
+            trashAssetsBeforeRuns: false,
+            viewportHeight: request.environment.viewport.height,
+            viewportWidth: request.environment.viewport.width
+        }
+    });
+    return cypressPromise.then(getRandomResults);
 }
 
 function runHeadlessTest(request, timestamp) {
@@ -230,7 +391,7 @@ function runHeadlessTest(request, timestamp) {
             filename: imagePath,
             type: 'image/png'
         }));
-        return { images: images };
+        return { images: images, videos: [] };
     }
 
     return runWebTests(request, timestamp).then(getHeadlessResults);
@@ -238,28 +399,28 @@ function runHeadlessTest(request, timestamp) {
 
 function runBdtTest(request, timestamp) {
     function getBdtResults() {
-        return { images: [] };
+        return { images: [], videos: [] };
     }
 
     return runWebTests(request, timestamp).then(getBdtResults);
 }
 
 function runMutationWebTest(request, timestamp) {
-console.log("run mutation");
-var projectPath=getProjectPath(request, timestamp);
-exec("npm --prefix "+projectPath+" install "+projectPath)
-// fs.renameSync("package.json","package.jsonbak");
-// fs.copyFileSync(projectPath+"/package.json","package.json");
-// exec("npm install");
-// fs.unlinkSync("package.json");
-// fs.renameSync("package.jsonbak","package.json");
-request.projectPath=projectPath;
-replaceTemplateTask(request, WebPath.MUTATION + "/stryker.conf");
-replaceTemplateTask(request, WebPath.MUTATION + "/karma.conf");
-//fs.renameSync(WebPath.MUTATION + "/karma.conf.js",projectPath+ "/karma.conf.js");
-//fs.renameSync(WebPath.MUTATION + "/stryker.conf.js",projectPath+ "/stryker.conf.js");
-exec("stryker run "+WebPath.MUTATION+"/stryker.conf.js");
-return { images: [] };
+    console.log("run mutation");
+    var projectPath = getProjectPath(request, timestamp);
+    exec("npm --prefix " + projectPath + " install " + projectPath);
+    // fs.renameSync("package.json","package.jsonbak");
+    // fs.copyFileSync(projectPath+"/package.json","package.json");
+    // exec("npm install");
+    // fs.unlinkSync("package.json");
+    // fs.renameSync("package.jsonbak","package.json");
+    request.projectPath = projectPath;
+    replaceTemplateTask(request, WebPath.MUTATION + '/stryker.conf');
+    replaceTemplateTask(request, WebPath.MUTATION + '/karma.conf');
+    //fs.renameSync(WebPath.MUTATION + "/karma.conf.js",projectPath+ "/karma.conf.js");
+    //fs.renameSync(WebPath.MUTATION + "/stryker.conf.js",projectPath+ "/stryker.conf.js");
+    exec('stryker run ' + WebPath.MUTATION + '/stryker.conf.js');
+    return { images: [], videos: [] };
 }
 
 function runUsabilityTest(request, timestamp) {
@@ -335,8 +496,8 @@ function runWebTests(request, timestamp) {
 
 function sendResults(request, results) {
     console.log(' [x] Sending results to email=%s, from email=%s', request.email, FROM_DEFAULT_EMAIL);
-    
-    function attachBase64Image(image) {
+
+    function attachBase64(image) {
         const bitmap = fs.readFileSync(image.path);
         const base64Image = new Buffer(bitmap).toString('base64');
         return {
@@ -349,21 +510,27 @@ function sendResults(request, results) {
     }
 
     function getHtmlString(task) {
-        if(task==WebTask.MUTATION)
-            {
-                const data = fs.readFileSync(`${WebAssets.MUTATION_REPORT}/.html`, 'utf-8');
-                return data.toString();
-            } 
-        const data = fs.readFileSync(`${WebAssets.REPORT}/index.html`, 'utf-8');
-        return data.toString();
+        if (task === WebTask.MUTATION) {
+            const data = fs.readFileSync(`${WebAssets.MUTATION_REPORT}/index.html`, 'utf-8');
+            return data.toString();
+        } else if (task === WebTask.RANDOM || task === WebTask.RANDOM_ANDROID) {
+            return `<p>Check your attachments, randomSeed=${results.randomSeed}, maxEvents=${results.maxEvents} :)</p>`;
+        } else {
+            const data = fs.readFileSync(`${WebAssets.REPORT}/${request.environmentId}.html`, 'utf-8');
+            return data.toString();
+        }
     }
+
+    const imagesAttachments = results.images.map(attachBase64);
+    const videosAttachments = results.videos.map(attachBase64);
+    const attachments = imagesAttachments.concat(videosAttachments);
 
     const mailObject = {
         to: request.email,
         from: FROM_DEFAULT_EMAIL,
         subject: 'Top Testing Tool Test results',
-        html: getHtmlString(request.WebTask),
-        attachments: results.images.map(attachBase64Image)
+        html: getHtmlString(request.type),
+        attachments: attachments
     };
 
     console.log(' [x] Sendgrid mail object=%s', JSON.stringify(mailObject, null, 2));

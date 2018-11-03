@@ -53,7 +53,7 @@ class Generator {
          * @param {Array.<String>} specs List of spec file paths that are to be run
          */
         before: '__BEFORE__FUNC__',
-        // after: '__AFTER__FUNC__',
+        beforeTest: '__BEFORE_TEST_FUNC__',
     };
     this.baseCopy = this.baseSpec;
   }
@@ -67,11 +67,15 @@ class Generator {
     }
     str = str.replace('"__BEFORE__FUNC__"', beforeFun);
 
-    // let afterFun = 'function () { browser.saveScreenshot([\'./snapshot.png\']); }';
-    // str = str.replace('"__AFTER__FUNC__"', afterFun)
+    let beforeTest = `function (test) { var title = test.title + '.png';browser.saveScreenshot('${(this.screenshotPath || '.')}/' + title); }`;
+    str = str.replace('"__BEFORE_TEST_FUNC__"', beforeTest);
 
     str = 'exports.config = ' + str;
     return str;
+  }
+
+  setVrtScreenshotPath(screenshotPath) {
+    this.screenShotsPath
   }
 
   setWindowSize(viewport) {
@@ -157,6 +161,7 @@ class Generator {
 
   setScreenShotsPath(request, screenShotsPath) {
     this.baseCopy.screenshotPath = `${screenShotsPath}/${request.environmentId}`;
+    this.screenshotPath = `${screenShotsPath}/${request.environmentId}`;
     fs.mkdirSync(this.baseCopy.screenshotPath);
   }
 
