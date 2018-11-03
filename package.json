@@ -24,7 +24,7 @@
     "amqplib": "^0.5.2",
     "body-parser": "^1.18.3",
     "busboy": "^0.2.14",
-    "chai": "^4.2.0",
+    "chai": "^4.1.2",
     "cypress": "^3.1.0",
     "download-file-sync": "^1.0.4",
     "express": "^4.16.3",
@@ -38,9 +38,9 @@
     "resemblejs": "^2.10.3",
     "seedrandom": "^2.4.4",
     "uuid": "^3.3.2",
-    "wdio-cucumber-framework": "^2.2.7",
+    "wdio-cucumber-framework": "^1.0.2",
     "wdio-html-reporter": "^1.0.2",
-    "webdriverio": "^4.13.2"
+    "webdriverio": "^4.8.0"
   },
   "devDependencies": {
     "jasmine": "^3.2.0",
@@ -55,7 +55,7 @@
     "stryker-javascript-mutator": "^0.11.0",
     "stryker-karma-runner": "^0.18.3",
     "wdio-jasmine-framework": "^0.3.2",
-    "wdio-selenium-standalone-service": "0.0.9",
+    "wdio-selenium-standalone-service": "0.0.10",
     "wdio-spec-reporter": "^0.1.2"
   }
 }
