@@ -1,6 +1,8 @@
 node_modules/
 uploadedFiles/
 errorShots/
+errorVideos/
+videos/
 report/
 vrtShots/
 gitRepos/
@@ -10,3 +12,4 @@ vrt/wdio.*.conf.js
 vrt/test/specs/vrt.js
 SimianArmy/
 apk/
+SimianArmy.zip
