@@ -537,9 +537,6 @@ function mockData(rows,path,dataLayout) {
     var pass = JSON.parse(fs.readFileSync(`data/pass.txt`, 'utf8')).pass;
     var email = JSON.parse(fs.readFileSync(`data/email.txt`, 'utf8')).email;
 
-    //console.log(pass);
-    //console.log(email);
-
     var msg='';
     for(var i=0;i<rows;i++)
     {
@@ -548,10 +545,10 @@ function mockData(rows,path,dataLayout) {
             switch(dataLayout[key])
             {
                 case "email":
-                    msg+=email[i];
+                    msg+=email[Math.floor(Math.random()*1000)];
                     break;
                 case "pass":
-                    msg+=pass[i];
+                    msg+=pass[Math.floor(Math.random()*1000)];
                     break;
                 default:
                     msg+=dataLayout[key];
@@ -572,7 +569,9 @@ function runWebTests(request, timestamp) {
     console.log(' [x] Running a web test with wdio path=%s/%s', projectPath, configFileName);
     if(request.type==WebTask.BDT && typeof request.pathToMock != "undefined")
     {
-        mockData(request.mockSize,`${projectPath}/${request.pathToMock}`,request.dataMock)
+        mockData(request.mockSize,`${projectPath}/${request.pathToMock}`,request.dataMock);
+        fs.mkdirSync(`${WebAssets.REPORT}/${request.environmentId}`);
+        fs.copyFileSync(`${projectPath}/${request.pathToMock}`,`${WebAssets.REPORT}/${request.environmentId}/mock.html`);
     }
     const wdio = new Launcher(`${projectPath}/${configFileName}`);
     return wdio.run();
@@ -614,11 +613,18 @@ function sendResults(request, results) {
                     <li><strong>Environment Id:</strong> ${request.environmentId}</li>
                 </ul>`;
         } else {
+
             let data = fs.readFileSync(`${WebAssets.REPORT}/${request.environmentId}.html`, 'utf-8');
             data += `
                 <ul>
                     <li><strong>Environment Id:</strong> ${request.environmentId}</li>
                 </ul>`
+            if(task==WebTask.BDT && typeof request.pathToMock != "undefined")
+            {
+                data += "<p>Your mocked data and scenario run was:</p>"
+
+                data +=  "<pre>"+fs.readFileSync(`${WebAssets.REPORT}/${request.environmentId}/mock.html`)+"</pre>";
+            }
             return data.toString();
         }
     }
