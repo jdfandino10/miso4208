@@ -51,6 +51,58 @@ app.post('/test', (req, res) => {
     res.json({ msg: 'Tests are running. Check your email with the results as soon as they are ready.' });
 });
 
+app.post('/plan', (req, res) => {
+    /**
+     * {
+     *   email: <string>, // for all types
+     *   url: <string>,
+     *   baseId: <string>, // only for 'vrt'
+     *   compareUrl: <string>, // only for 'vrt'
+     *   gitUrl: <string>, // for  headless, randomweb, bdt
+     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt' | 'mutation-web' | 'chaos'},
+     *   randomSeed: <number>,
+     *   basePath: <string>,
+     *   gremlinsTTL: <number>, // only for 'random-web'
+     *   environments: [
+     *     {
+     *       browser: {'chrome' | 'firefox'},
+     *       viewport: {
+     *         width: <number>
+     *         height: <number>
+     *       }
+     *     },
+     *     ...
+     *   ],
+     *   accessKey: <string>,
+     *   accessSecret: <string>,
+     *   regionName: <string>,
+     * }
+     */
+    var message = req.body;
+    message.forEach(testMessage => {
+        testMessage.id = uuidv4();
+        testMessage.plan = message.name;
+        if(typeof testMessage.environments !== 'undefined')
+        {
+        const environments = testMessage.environments || [{}];
+        environments.forEach((environment) => {
+            testMessage.environmentId = uuidv4();
+            testMessage.environment = environment;
+        producer.sendMessage(testMessage);
+        });
+        }
+        else
+        {
+            producer.sendMessage(testMessage);
+        }
+
+    });
+    
+
+    res.json({ msg: 'Plan is running. Check your email with the results as soon as they are ready.' });
+});
+
+
 app.post('/other', function(req, res) {
     /**
      * {
@@ -68,44 +120,6 @@ app.post('/other', function(req, res) {
     producer.sendMessage(message);
 
     res.json({ msg: 'Test is running. Check your email with the results as soon as they are ready' });
-});
-
-app.post('/randomAndroid', function(req, res) {
-    /**
-     * {
-     *   email: <string>,
-     *   compareUrl: <string>,
-     *   gitUrl: <string>,
-     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt' | 'mutation-web'},
-     *   testPath: <string>,
-     *   mutatePath: <string>,
-     * }
-     */
-    var message = req.body;
-
-    message.id = uuidv4();
-    producer.sendMessage(message);
-
-    res.json({ msg: 'chaos is running. Check your email with the results as soon as they are ready' });
-});
-
-app.post('/chaos', function(req, res) {
-    /**
-     * {
-     *   email: <string>,
-     *   compareUrl: <string>,
-     *   gitUrl: <string>,
-     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt' | 'mutation-web'},
-     *   testPath: <string>,
-     *   mutatePath: <string>,
-     * }
-     */
-    var message = req.body;
-
-    message.id = uuidv4();
-    producer.sendMessage(message);
-
-    res.json({ msg: 'chaos is running. Check your email with the results as soon as they are ready' });
 });
 
 producer.init().then(() => {
