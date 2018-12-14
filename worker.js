@@ -634,10 +634,15 @@ function sendResults(request, results) {
     const scenariosPath = (results.scenarios || []).map(attachBase64);
     const attachments = imagesAttachments.concat(videosAttachments).concat(scenariosPath);
 
+    var subj = `${request.type} Test results - Top Testing Tool`;
+    if(typeof request.plan !== 'undefined')
+    {
+        subj=`[${request.plan} ${request.currentTest}/${request.totalTests}] ${request.type} Test results - Top Testing Tool`;
+    }
     const mailObject = {
         to: request.email,
         from: FROM_DEFAULT_EMAIL,
-        subject: 'Top Testing Tool Test results',
+        subject: subj,
         html: getHtmlString(request.type),
         attachments: attachments
     };

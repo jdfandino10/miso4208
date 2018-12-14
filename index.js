@@ -79,9 +79,13 @@ app.post('/plan', (req, res) => {
      * }
      */
     var message = req.body;
-    message.forEach(testMessage => {
+    var nTests = message.tests.length;
+    var i=1;
+    message.tests.forEach(testMessage => {
         testMessage.id = uuidv4();
         testMessage.plan = message.name;
+        testMessage.totalTests=nTests;
+        testMessage.currentTest=i;
         if(typeof testMessage.environments !== 'undefined')
         {
         const environments = testMessage.environments || [{}];
@@ -95,7 +99,7 @@ app.post('/plan', (req, res) => {
         {
             producer.sendMessage(testMessage);
         }
-
+        i++;
     });
     
 
