@@ -126,6 +126,44 @@ app.post('/other', function(req, res) {
     res.json({ msg: 'Test is running. Check your email with the results as soon as they are ready' });
 });
 
+app.post('/randomAndroid', function(req, res) {
+    /**
+     * {
+     *   email: <string>,
+     *   compareUrl: <string>,
+     *   gitUrl: <string>,
+     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt' | 'mutation-web'},
+     *   testPath: <string>,
+     *   mutatePath: <string>,
+     * }
+     */
+    var message = req.body;
+
+    message.id = uuidv4();
+    producer.sendMessage(message);
+
+    res.json({ msg: 'chaos is running. Check your email with the results as soon as they are ready' });
+});
+
+app.post('/chaos', function(req, res) {
+    /**
+     * {
+     *   email: <string>,
+     *   compareUrl: <string>,
+     *   gitUrl: <string>,
+     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt' | 'mutation-web'},
+     *   testPath: <string>,
+     *   mutatePath: <string>,
+     * }
+     */
+    var message = req.body;
+
+    message.id = uuidv4();
+    producer.sendMessage(message);
+
+    res.json({ msg: 'chaos is running. Check your email with the results as soon as they are ready' });
+});
+
 producer.init().then(() => {
     app.listen(3000);
 });
