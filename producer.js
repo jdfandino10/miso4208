@@ -18,6 +18,7 @@ function init() {
 }
 
 function sendMessage(message) {
+    console.log(message);
     var jsonMessage = JSON.stringify(message);
     rabbitChannel.sendToQueue(REQUEST_QUEUE_NAME, Buffer.from(jsonMessage), { persistent: true });
 }

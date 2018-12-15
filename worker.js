@@ -84,14 +84,14 @@ function createMissingFolders(keyValue) {
 function processNextQueueMessage(requestQueue) {
     requestQueue.consume(REQUEST_QUEUE_NAME, (queueMessage) => {
         const request = JSON.parse(queueMessage.content.toString());
-        console.log(' [x] Received message id=%s, envid=%s', request.id, request.environmentId);
+        console.log(' [x] Received message id=%s', request.id);
         processRequest(request)
         .then(() => {
-            console.log(' [x] Finished processing message id=%s, envid=%s', request.id, request.environmentId);
+            console.log(' [x] Finished processing message id=%s', request.id);
             requestQueue.ack(queueMessage)
         })
         .catch((err) => {
-            console.log(' [x] An error occured processing message id=%s, envid=%s: %s', request.id, request.environmentId, err)
+            console.log(' [x] An error occured processing message id=%s: %s', request.id, err)
             requestQueue.ack(queueMessage);
         });
     }, { noAck: false });
@@ -125,10 +125,10 @@ function getProjectPath(request, timestamp, useBasePath = false) {
     if (needToDownloadGitRepo(request)) {
         const basePath = useBasePath && request.basePath ? `/${request.basePath}` : '';
         const folderName = parseFolderName(request.gitUrl);
-        if(request.type==WebTask.MUTATION) {
+        if(request.type === WebTask.MUTATION) {
           return `${WebPath.GIT}/${folderName}_${timestamp}${basePath}`;
         }
-        return `${WebPath.GIT}/${folderName}_${request.environmentId}_${timestamp}${basePath}`;
+        return `${WebPath.GIT}/${folderName}_${request.id}_${timestamp}${basePath}`;
     } else {
         switch (request.type) {
             case WebTask.RANDOM:
@@ -203,7 +203,7 @@ function runTests(request, timestamp) {
 }
 
 function downloadApk(request) {
-    var packageParts = request.package.split('.');
+    var packageParts = request.packageName.split('.');
     var fileName = packageParts[packageParts.length - 1] + '.apk';
     var apkDir = path.join(WebPath.APK_PATH, fileName);
     var command = `curl "${request.apkUrl}" -o ${apkDir} -L -s`;
@@ -217,7 +217,7 @@ function runRandomTestAndroid(request, timestamp) {
     const defaultRandomSeed = (new Date()).getTime();
     const defaultMaxEvents = 50;
 
-    const videosPath = `${WebAssets.VIDEOS}/${request.environmentId}`;
+    const videosPath = `${WebAssets.VIDEOS}/${request.id}`;
     const maxEvents = request.maxEvents || defaultMaxEvents;
     const randomSeed =  request.randomSeed || defaultRandomSeed;
 
@@ -239,14 +239,14 @@ function runRandomTestAndroid(request, timestamp) {
     const promise = new Promise((resolve, _) => {
         const apkDir = downloadApk(request);
         try {
-            console.log(' [x] Trying to uninstall apk %s', request.package);
-            exec(`adb uninstall ${request.package}`);
-            console.log(' [x] Uninstalled apk %s', request.package);
+            console.log(' [x] Trying to uninstall apk %s', request.packageName);
+            exec(`adb uninstall ${request.packageName}`);
+            console.log(' [x] Uninstalled apk %s', request.packageName);
         } catch (e) {
             console.log(' [x] App not installed on device, continue...');
         }
 
-        console.log(' [x] Installing apk with package %s...', request.package);
+        console.log(' [x] Installing apk with package %s...', request.packageName);
         exec(`adb install ${apkDir}`);
 
         console.log(' [x] Starting video recording...');
@@ -257,20 +257,22 @@ function runRandomTestAndroid(request, timestamp) {
         });
 
         console.log(' [x] Starting monkey testing with %s events and %d seed', maxEvents, randomSeed);
-        exec(`adb shell monkey -p ${request.package} -v ${maxEvents} -s ${randomSeed}`);
-        console.log(' [x] Trying to kill video recording...');
-        videoRecording.kill('SIGINT');
+        exec(`adb shell monkey -p ${request.packageName} -v ${maxEvents} -s ${randomSeed} --pct-syskeys 0 --pct-majornav 0`);
+        
+        console.log(` [x] Waiting 10 seconds for video to be ready...`);
+        setTimeout(() => {
+            console.log(' [x] Trying to kill video recording...');
+            videoRecording.kill('SIGINT');
+        }, 10000);
 
         function performVideoPostProcessing() {
             if (!fs.existsSync(videosPath)) {
                 fs.mkdirSync(videosPath);
             }
-            console.log(` [x] Waiting 2 seconds for video to be ready...`);
-            setTimeout(() => {
-              console.log(` [x] Saving video at ${videosPath}`);
-              exec(`adb pull /sdcard/monkey.mp4 ${path.join(videosPath, 'monkey.mp4')}`);
-              resolve();
-            }, 2000);
+            
+            console.log(` [x] Saving video at ${videosPath}`);
+            exec(`adb pull /sdcard/monkey.mp4 ${path.join(videosPath, 'monkey.mp4')}`);
+            resolve();
         }
     });
 
@@ -326,9 +328,9 @@ function runImageCompareVrtTest(request, timestamp) {
 
     replaceTemplateTask(request, `${WebPath.VRT}/test/specs/vrt`);
     return runWebTests(request, timestamp).then(() => {
-        const imgPath1 = `${WebAssets.VRT}/${request.environmentId}_snapshot_1.png`;
-        const imgPath2 = `${WebAssets.VRT}/${request.environmentId}_snapshot_2.png`;
-        const outputFile = `${WebAssets.VRT}/${request.environmentId}_output.png`;
+        const imgPath1 = `${WebAssets.VRT}/${request.id}_snapshot_1.png`;
+        const imgPath2 = `${WebAssets.VRT}/${request.id}_snapshot_2.png`;
+        const outputFile = `${WebAssets.VRT}/${request.id}_output.png`;
         return regression(imgPath1, imgPath2, outputFile);
     });
 }
@@ -338,7 +340,7 @@ function runIdCompareVrtTest(request, timestamp) {
 
     const vrtIdPath1 = `${WebAssets.SCREENSHOTS}/${request.vrtId}`;
     const vrtIdPath2 = `${WebAssets.SCREENSHOTS}/${request.compareVrtId}`;
-    const outputPath = `${WebAssets.SCREENSHOTS}/${request.environmentId}`;
+    const outputPath = `${WebAssets.SCREENSHOTS}/${request.id}`;
 
     function getVrtResults(imgPath1, imgPath2, outputFile) {
         const imgName1 = path.basename(imgPath1);
@@ -390,9 +392,9 @@ function runRandomTest(request, timestamp) {
 
     const projectLocation = './random';
     const monkeyLocation = './random/cypress/integration/monkey_testing_ripper.spec.js';
-    const screenShotsPath = `${WebAssets.SCREENSHOTS}/${request.environmentId}`;
-    const videosPath = `${WebAssets.VIDEOS}/${request.environmentId}`;
-    const scenariosPath = `${WebAssets.SCENARIOS}/${request.environmentId}`;
+    const screenShotsPath = `${WebAssets.SCREENSHOTS}/${request.id}`;
+    const videosPath = `${WebAssets.VIDEOS}/${request.id}`;
+    const scenariosPath = `${WebAssets.SCENARIOS}/${request.id}`;
 
     const randomSeed = request.randomSeed || defaultRandomSeed;
     const maxEvents = request.maxEvents || defaultMaxEvents;
@@ -466,7 +468,7 @@ function runRandomTest(request, timestamp) {
 
 function runHeadlessTest(request, timestamp) {
     function getHeadlessResults() {
-        const screenShotsPath = `${WebAssets.SCREENSHOTS}/${request.environmentId}`;
+        const screenShotsPath = `${WebAssets.SCREENSHOTS}/${request.id}`;
         const images = fs.readdirSync(screenShotsPath).map(imagePath => ({
             path: `${screenShotsPath}/${imagePath}`,
             filename: imagePath,
@@ -524,7 +526,7 @@ function runUsabilityTest(request, timestamp) {
     }
 
     function processResponse(response) {
-        console.log(response)
+        console.log(response);
         var report_url = response.results.report_url;
         var data = `<p>Usability test done. Check your results at:</p>\n<p><a href="${report_url}">${report_url}</a></p>`;
         fs.writeFileSync(`${WebAssets.REPORT}/index.html`, data, 'utf8');
@@ -533,17 +535,14 @@ function runUsabilityTest(request, timestamp) {
 }
 
 function mockData(rows,path,dataLayout) {
-
     var pass = JSON.parse(fs.readFileSync(`data/pass.txt`, 'utf8')).pass;
     var email = JSON.parse(fs.readFileSync(`data/email.txt`, 'utf8')).email;
 
     var msg='';
-    for(var i=0;i<rows;i++)
-    {
+    for(var i=0;i<rows;i++) {
         msg+='\t\t\t|';
         for (key in dataLayout) {
-            switch(dataLayout[key])
-            {
+            switch(dataLayout[key]) {
                 case "email":
                     msg+=email[Math.floor(Math.random()*1000)];
                     break;
@@ -565,13 +564,12 @@ function mockData(rows,path,dataLayout) {
 
 function runWebTests(request, timestamp) {
     const projectPath = getProjectPath(request, timestamp, true);
-    const configFileName = `wdio.${request.environmentId}.conf.js`;
+    const configFileName = `wdio.${request.id}.conf.js`;
     console.log(' [x] Running a web test with wdio path=%s/%s', projectPath, configFileName);
-    if(request.type==WebTask.BDT && typeof request.pathToMock != "undefined")
-    {
+    if(request.type==WebTask.BDT && typeof request.pathToMock !== 'undefined') {
         mockData(request.mockSize,`${projectPath}/${request.pathToMock}`,request.dataMock);
-        fs.mkdirSync(`${WebAssets.REPORT}/${request.environmentId}`);
-        fs.copyFileSync(`${projectPath}/${request.pathToMock}`,`${WebAssets.REPORT}/${request.environmentId}/mock.html`);
+        fs.mkdirSync(`${WebAssets.REPORT}/${request.id}`);
+        fs.copyFileSync(`${projectPath}/${request.pathToMock}`,`${WebAssets.REPORT}/${request.id}/mock.html`);
     }
     const wdio = new Launcher(`${projectPath}/${configFileName}`);
     return wdio.run();
@@ -600,7 +598,7 @@ function sendResults(request, results) {
             return `
                 <h1>Check your attachments</h1>
                 <ul>
-                    <li><strong>Environment Id:</strong> ${request.environmentId}</li>
+                    <li><strong>Message Id:</strong> ${request.id}</li>
                     <li><strong>Random Seed:</strong> ${request.randomSeed}</li>
                     <li><strong>Max Events:</strong> ${request.maxEvents}</li>
                 </ul>`;
@@ -610,20 +608,17 @@ function sendResults(request, results) {
                 <ul>
                     <li><strong>Id #1:</strong> ${request.vrtId}</li>
                     <li><strong>Id #2:</strong> ${request.compareVrtId}</li>
-                    <li><strong>Environment Id:</strong> ${request.environmentId}</li>
+                    <li><strong>Message Id:</strong> ${request.id}</li>
                 </ul>`;
         } else {
-
-            let data = fs.readFileSync(`${WebAssets.REPORT}/${request.environmentId}.html`, 'utf-8');
+            let data = fs.readFileSync(`${WebAssets.REPORT}/${request.id}.html`, 'utf-8');
             data += `
                 <ul>
-                    <li><strong>Environment Id:</strong> ${request.environmentId}</li>
+                    <li><strong>Message Id:</strong> ${request.id}</li>
                 </ul>`
-            if(task==WebTask.BDT && typeof request.pathToMock != "undefined")
-            {
+            if(task==WebTask.BDT && typeof request.pathToMock != "undefined") {
                 data += "<p>Your mocked data and scenario run was:</p>"
-
-                data +=  "<pre>"+fs.readFileSync(`${WebAssets.REPORT}/${request.environmentId}/mock.html`)+"</pre>";
+                data +=  "<pre>"+fs.readFileSync(`${WebAssets.REPORT}/${request.id}/mock.html`)+"</pre>";
             }
             return data.toString();
         }
@@ -635,10 +630,10 @@ function sendResults(request, results) {
     const attachments = imagesAttachments.concat(videosAttachments).concat(scenariosPath);
 
     var subj = `${request.type} Test results - Top Testing Tool`;
-    if(typeof request.plan !== 'undefined')
-    {
+    if(typeof request.plan !== 'undefined') {
         subj=`[${request.plan} ${request.currentTest}/${request.totalTests}] ${request.type} Test results - Top Testing Tool`;
     }
+
     const mailObject = {
         to: request.email,
         from: FROM_DEFAULT_EMAIL,
