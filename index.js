@@ -65,16 +65,6 @@ app.post('/plan', (req, res) => {
 });
 
 app.post('/other', function(req, res) {
-    /**
-     * {
-     *   email: <string>,
-     *   compareUrl: <string>,
-     *   gitUrl: <string>,
-     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt' | 'mutation-web'},
-     *   testPath: <string>,
-     *   mutatePath: <string>,
-     * }
-     */
     var message = req.body;
 
     message.id = uuidv4();
