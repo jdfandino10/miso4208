@@ -4,14 +4,14 @@ describe('VRT', function() {
     browser.reload()
     browser.url('<<<url>>>');
     // save screenshot to file
-    browser.saveScreenshot('./vrtShots/<<<environmentId>>>_snapshot_1.png');
+    browser.saveScreenshot('./vrtShots/<<<id>>>_snapshot_1.png');
   });
 
   it('it should take screenshot from url 2', function() {
     browser.reload()
     browser.url('<<<compareUrl>>>');
     // save screenshot to file
-    browser.saveScreenshot('./vrtShots/<<<environmentId>>>_snapshot_2.png');
+    browser.saveScreenshot('./vrtShots/<<<id>>>_snapshot_2.png');
   });
 
 });

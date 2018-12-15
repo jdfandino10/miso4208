@@ -142,7 +142,7 @@ class Generator {
     this.baseCopy.reporters.push('html');
     this.baseCopy.reporterOptions = {
       html: {
-        outFile: `${htmlReporterPath}/${request.environmentId}.html`
+        outFile: `${htmlReporterPath}/${request.id}.html`
       }
     };
   }
@@ -170,8 +170,8 @@ class Generator {
   }
 
   setScreenShotsPath(request, screenShotsPath) {
-    this.baseCopy.screenshotPath = `${screenShotsPath}/${request.environmentId}`;
-    this.screenshotPath = `${screenShotsPath}/${request.environmentId}`;
+    this.baseCopy.screenshotPath = `${screenShotsPath}/${request.id}`;
+    this.screenshotPath = `${screenShotsPath}/${request.id}`;
     fs.mkdirSync(this.baseCopy.screenshotPath);
   }
 
@@ -201,7 +201,7 @@ class Generator {
     }
 
     const jsonResults = this.toString();
-    const configFileName = `wdio.${request.environmentId}.conf.js`;
+    const configFileName = `wdio.${request.id}.conf.js`;
     fs.writeFileSync(`${projectPath}/${configFileName}`, jsonResults);
   }
 }

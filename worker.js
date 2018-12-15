@@ -123,6 +123,7 @@ function getProjectPath(request, timestamp, useBasePath = false) {
     }
 
     if (needToDownloadGitRepo(request)) {
+        console.log(' [x] Need to download');
         const basePath = useBasePath && request.basePath ? `/${request.basePath}` : '';
         const folderName = parseFolderName(request.gitUrl);
         if(request.type === WebTask.MUTATION) {
@@ -130,11 +131,16 @@ function getProjectPath(request, timestamp, useBasePath = false) {
         }
         return `${WebPath.GIT}/${folderName}_${request.id}_${timestamp}${basePath}`;
     } else {
+        console.log(' [x] No download required');
         switch (request.type) {
             case WebTask.RANDOM:
+                console.log(' [x] Random project path');
                 return WebPath.RANDOM;
             case WebTask.VRT:
+                console.log(' [x] VRT project path');
                 return WebPath.VRT;
+            default:
+                console.log(' [x] Bad type %s', request.type);
         }
     }
 }
@@ -151,6 +157,8 @@ function downloadGitRepository(request, timestamp) {
 }
 
 function replaceTemplateTask(request, filePath, ext='js') {
+    console.log(' [x] Replacing template task %s %s', request.type, filePath);
+
     let data = fs.readFileSync(`${filePath}.template`, 'utf8');
 
     for (key in request) {
@@ -178,6 +186,7 @@ function runTests(request, timestamp) {
     ) {
         wdioGenerator = new config_generator();
         projectPath = getProjectPath(request, timestamp, true);
+        console.log(' [x] Project path is %s', projectPath);
         wdioGenerator.generate(request, projectPath, WebAssets.REPORT, WebAssets.SCREENSHOTS);
         console.log('generated wdio.conf.js!');
     }
@@ -270,9 +279,12 @@ function runRandomTestAndroid(request, timestamp) {
                 fs.mkdirSync(videosPath);
             }
             
-            console.log(` [x] Saving video at ${videosPath}`);
-            exec(`adb pull /sdcard/monkey.mp4 ${path.join(videosPath, 'monkey.mp4')}`);
-            resolve();
+            console.log(` [x] Waiting extra 5 seconds to store the video...`);
+            setTimeout(() => {
+                console.log(` [x] Saving video at ${videosPath}`);
+                exec(`adb pull /sdcard/monkey.mp4 ${path.join(videosPath, 'monkey.mp4')}`);
+                resolve();
+            }, 5000);
         }
     });
 
@@ -375,11 +387,16 @@ function runIdCompareVrtTest(request, timestamp) {
 
         const imgPath1 = `${vrtIdPath1}/${imgPath}`;
         const imgPath2 = `${vrtIdPath2}/${imgPath}`;
-        const outputFile = `${outputPath}/${imgName}.vrt.png`;
-        return regression(imgPath1, imgPath2, outputFile);
+        if (fs.existsSync(imgPath1) && fs.existsSync(imgPath2)) {
+            const outputFile = `${outputPath}/${imgName}.vrt.png`;
+            return regression(imgPath1, imgPath2, outputFile);
+        } else {
+            return Promise.resolve({images: []});
+        }
     });
 
     return Promise.all(promises).then(allResults => {
+        console.log(' [x] Almost there... :D');
         const answerResults = { images: [], videos: [] };
         allResults.forEach(result => answerResults.images = answerResults.images.concat(result.images));
         return answerResults;
@@ -477,7 +494,15 @@ function runHeadlessTest(request, timestamp) {
         return { images: images, videos: [] };
     }
 
-    return runWebTests(request, timestamp).then(getHeadlessResults);
+    return runWebTests(request, timestamp)
+    .then(() => {
+        if (request.compareVrtId) {
+            request.vrtId = request.id;
+            return runIdCompareVrtTest(request, timestamp);
+        } else {
+            return getHeadlessResults();
+        }
+    });
 }
 
 function runBdtTest(request, timestamp) {
@@ -629,7 +654,7 @@ function sendResults(request, results) {
     const scenariosPath = (results.scenarios || []).map(attachBase64);
     const attachments = imagesAttachments.concat(videosAttachments).concat(scenariosPath);
 
-    var subj = `${request.type} Test results - Top Testing Tool`;
+    var subj = `${request.type} - Test results ID: ${request.id}`;
     if(typeof request.plan !== 'undefined') {
         subj=`[${request.plan} ${request.currentTest}/${request.totalTests}] ${request.type} Test results - Top Testing Tool`;
     }

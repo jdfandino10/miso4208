@@ -123,7 +123,6 @@ function randomButton() {
                         tag: 'button',
                         tagId: randomItem.getAttribute('id'),
                         tagClasses: randomItem.getAttribute('class'),
-                        text: randomText
                     });
                 }
 
