@@ -50,32 +50,6 @@ function startTest(messageType, req, res) {
 }
 
 app.post('/plan', (req, res) => {
-    /**
-     * {
-     *   email: <string>, // for all types
-     *   url: <string>,
-     *   baseId: <string>, // only for 'vrt'
-     *   compareUrl: <string>, // only for 'vrt'
-     *   gitUrl: <string>, // for  headless, randomweb, bdt
-     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt' | 'mutation-web' | 'chaos'},
-     *   randomSeed: <number>,
-     *   basePath: <string>,
-     *   gremlinsTTL: <number>, // only for 'random-web'
-     *   environments: [
-     *     {
-     *       browser: {'chrome' | 'firefox'},
-     *       viewport: {
-     *         width: <number>
-     *         height: <number>
-     *       }
-     *     },
-     *     ...
-     *   ],
-     *   accessKey: <string>,
-     *   accessSecret: <string>,
-     *   regionName: <string>,
-     * }
-     */
     var message = req.body;
     var nTests = message.tests.length;
     var i = 1;
@@ -93,16 +67,6 @@ app.post('/plan', (req, res) => {
 });
 
 app.post('/other', function(req, res) {
-    /**
-     * {
-     *   email: <string>,
-     *   compareUrl: <string>,
-     *   gitUrl: <string>,
-     *   type: {'headless-web' | 'random-web' | 'random-android' | 'bdt-web' | 'vrt' | 'mutation-web'},
-     *   testPath: <string>,
-     *   mutatePath: <string>,
-     * }
-     */
     var message = req.body;
 
     message.id = uuidv4();
