@@ -50,7 +50,7 @@ const WebAssets = {
     MONKEY_FOLDER: 'monkey_testing_ripper.spec.js',
     VRT: './vrtShots',
     REPORT: './report',
-    MUTATION_REPORT: './mutationReport'
+    MUTATION_REPORT: './reports/mutation/html'
 };
 
 function init() {
@@ -530,7 +530,7 @@ function runUsabilityTest(request, timestamp) {
         var report_url = response.results.report_url;
         var data = `<p>Usability test done. Check your results at:</p>\n<p><a href="${report_url}">${report_url}</a></p>`;
         fs.writeFileSync(`${WebAssets.REPORT}/index.html`, data, 'utf8');
-        return { images: [] }
+        return {  images: [], videos: [] }
     }
 }
 
@@ -611,7 +611,15 @@ function sendResults(request, results) {
                     <li><strong>Message Id:</strong> ${request.id}</li>
                 </ul>`;
         } else {
-            let data = fs.readFileSync(`${WebAssets.REPORT}/${request.id}.html`, 'utf-8');
+            var data =""
+            if(task==WebTask.USABILITY)
+            {
+                data = fs.readFileSync(`${WebAssets.REPORT}/index.html`, 'utf-8');
+            }
+            else
+            {
+                data = fs.readFileSync(`${WebAssets.REPORT}/${request.id}.html`, 'utf-8');
+            }
             data += `
                 <ul>
                     <li><strong>Message Id:</strong> ${request.id}</li>
